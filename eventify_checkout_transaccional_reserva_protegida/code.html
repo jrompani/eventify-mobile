@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#121317;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-surface-variant": "#cbc3d7", "tertiary-fixed": "#6ffbbe", "on-primary-fixed-variant": "#5516be", "primary-fixed-dim": "#d0bcff", "on-tertiary-fixed": "#002113", "inverse-primary": "#6d3bd7", "primary-container": "#a078ff", "secondary": "#ffb3b5", "on-secondary-fixed": "#40000b", "tertiary-fixed-dim": "#4edea3", "inverse-on-surface": "#2f3035", "secondary-fixed-dim": "#ffb3b5", "surface-container-high": "#292a2e", "primary": "#d0bcff", "on-error-container": "#ffdad6", "surface-container-highest": "#343439", "inverse-surface": "#e3e2e8", "surface-variant": "#343439", "secondary-fixed": "#ffdada", "primary-fixed": "#e9ddff", "surface-dim": "#121317", "surface-container-low": "#1a1b20", "on-secondary": "#680018", "outline": "#958ea0", "on-primary-fixed": "#23005c", "on-surface": "#e3e2e8", "surface": "#121317", "error": "#ffb4ab", "on-tertiary": "#003824", "on-tertiary-container": "#00311f", "surface-bright": "#38393e", "surface-container-lowest": "#0d0e12", "secondary-container": "#a8002d", "on-secondary-container": "#ffb2b4", "on-tertiary-fixed-variant": "#005236", "on-secondary-fixed-variant": "#920026", "tertiary-container": "#00a572", "on-primary": "#3c0091", "error-container": "#93000a", "on-background": "#e3e2e8", "tertiary": "#4edea3", "surface-container": "#1f1f24", "outline-variant": "#494454", "background": "#121317", "on-primary-container": "#340080", "on-error": "#690005", "surface-tint": "#d0bcff" }, borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, spacing: { "space-lg": "1.5rem", "space-xl": "2rem", "gutter": "1rem", "space-xs": "0.25rem", "space-sm": "0.5rem", "space-md": "1rem", "margin": "1.25rem" }, fontFamily: { "label-sm": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"] }, fontSize: { "label-sm": ["10px", { lineHeight: "14px", fontWeight: "700" }], "body-sm": ["12px", { lineHeight: "16px", fontWeight: "400" }], "headline-md": ["22px", { lineHeight: "28px", fontWeight: "700" }], "label-md": ["12px", { lineHeight: "16px", fontWeight: "700" }], "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }], "headline-sm": ["18px", { lineHeight: "24px", fontWeight: "600" }], "label-lg": ["14px", { lineHeight: "20px", fontWeight: "600" }], "headline-lg": ["28px", { lineHeight: "36px", fontWeight: "700" }], "headline-xl": ["40px", { lineHeight: "48px", fontWeight: "800" }], "headline-xl-mobile": ["32px", { lineHeight: "40px", fontWeight: "800" }], "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }] } } } }</script></head><body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-space-sm flex items-center justify-between"><div class="flex items-center gap-space-xs"><button class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface hover:bg-surface-container transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[24px]">arrow_back</span></button><h1 class="font-headline-sm text-headline-sm text-on-surface tracking-tight truncate max-w-[190px]">Transactional Checkout</h1></div><div class="flex items-center gap-space-xs pr-space-xs"><div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-tertiary"><span class="material-symbols-outlined text-[14px]">lock</span><span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">256-bit</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full pt-16 bg-surface min-h-screen pb-safe"><div class="flex flex-col w-full pb-10">
+<!-- Countdown Urgency Bar -->
+<div class="mx-margin mt-space-md mb-space-sm p-space-sm rounded-DEFAULT bg-surface-container-low flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-space-xs min-w-0">
+<span class="relative flex h-2.5 w-2.5 mr-1">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-tertiary"></span>
+</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider truncate">Reserva retenida</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-tertiary">
+<span class="material-symbols-outlined text-[15px]">timer</span>
+<span class="font-label-md text-label-md tabular-nums text-tertiary font-bold" id="reservation-timer">14:32</span>
+</div>
+</div>
+<!-- Event Mini-Card -->
+<div class="mx-margin mb-space-md bg-surface-container rounded-DEFAULT p-space-md shadow-md relative overflow-hidden">
+<div class="absolute -right-8 -top-8 w-28 h-28 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
+<div class="flex gap-space-md items-start">
+<img class="w-20 h-20 rounded-DEFAULT object-cover shadow-sm shrink-0" data-alt="Atmospheric nocturnal electronic music festival crowd with dramatic neon laser lights and outdoor staging at Mandarine Park in violet, deep cyan and midnight tones with cinematic smoke effects" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKTG1Eb60oAWHxhry0nd0DPuzObDznmMz2XBZp6xxYveOQ5R_L-epOKUEEBlGkRjiXK8GtDA1eCzjuPQc3lQzttPBDhUi-EA8EhqZVh5u6Ij2RJrN80l6DoOKLCk3GrBW0r_mQDjsLO9aD1VWcSKiwwyQ95iuLValqpyGgzfOmqHgAPnWtzHTaExRhD5P2GtU4BHSmmLIdovOFQLJc8a-L8_KxEZ-m5agLz1FLmVEtLHkIOGIUUBNr"/>
+<div class="flex flex-col min-w-0 flex-1">
+<div class="flex items-center gap-1.5 mb-1">
+<span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary-fixed-dim font-label-sm text-label-sm uppercase tracking-wide">Open Air 2026</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Melodic Techno</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface leading-snug truncate">ARTBAT &amp; Mind Against</h2>
+<div class="flex items-center gap-1 mt-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-primary">calendar_today</span>
+<span class="font-body-sm text-body-sm">Sáb 18 Oct · 21:00 hs</span>
+</div>
+<div class="flex items-center gap-1 mt-0.5 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-primary">location_on</span>
+<span class="font-body-sm text-body-sm truncate">Mandarine Park, CABA</span>
+</div>
+</div>
+</div>
+<!-- Organizer Trust Stamp -->
+<div class="mt-space-sm pt-space-sm flex items-center justify-between bg-surface-container-low/70 rounded-full px-space-md py-1.5">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-[16px] text-tertiary">verified_user</span>
+<span class="font-label-sm text-label-sm text-on-surface truncate">BNP Producciones</span>
+</div>
+<div class="flex items-center gap-1 shrink-0">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="font-label-sm text-label-sm text-tertiary">98% Confiable</span>
+</div>
+</div>
+</div>
+<!-- Ticket Breakdown Deck -->
+<div class="mx-margin mb-space-md bg-surface-container rounded-DEFAULT p-space-md shadow-md">
+<div class="flex justify-between items-center mb-space-sm">
+<span class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">Detalle de Tickets</span>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">Lote 2 activo</span>
+</div>
+<div class="bg-surface-container-lowest/80 rounded-DEFAULT p-space-md">
+<div class="flex items-start justify-between">
+<div>
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface">1x General</span>
+<span class="px-2 py-0.5 rounded-full bg-primary/20 text-primary-fixed-dim font-label-sm text-label-sm">Fase 2</span>
+</div>
+<div class="flex items-center gap-1.5 mt-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px] text-tertiary">sensor_door</span>
+<span class="font-body-sm text-body-sm">Sector: Puerta Norte 2</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-sm text-headline-sm text-on-surface tracking-tight">$32.000</span>
+<span class="block font-label-sm text-label-sm text-outline">ARS</span>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-tertiary">schedule</span>
+<span class="font-body-sm text-body-sm">Ingreso prioritario hasta 01:00 hs</span>
+</div>
+<button class="text-primary font-label-sm text-label-sm underline hover:text-primary-fixed flex items-center gap-0.5" type="button">
+          Ver detalles
+          <span class="material-symbols-outlined text-[14px]">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Transparent Financial Ledger -->
+<div class="mx-margin mb-space-md bg-surface-container rounded-DEFAULT p-space-md shadow-md">
+<div class="flex items-center justify-between mb-space-md">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-tertiary">receipt_long</span>
+<span class="font-label-md text-label-md uppercase tracking-wider text-on-surface">Transparencia Financiera</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-tertiary/15 text-tertiary font-label-sm text-label-sm">Cero Cargos Ocultos</span>
+</div>
+<div class="space-y-2.5 text-on-surface-variant">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md">Subtotal entradas (1x)</span>
+<span class="font-body-md text-body-md text-on-surface tabular-nums">$32.000,00 ARS</span>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-1">
+<span class="font-body-md text-body-md">Cargo por Servicio Eventify</span>
+<span class="font-label-sm text-label-sm text-outline">(9.8%)</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface tabular-nums">$3.136,00 ARS</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md">Impuestos e IVA aplicables</span>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-surface-container-high text-tertiary font-bold">Incluido</span>
+</div>
+<div class="flex justify-between items-center text-tertiary">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">local_offer</span>
+<span class="font-body-md text-body-md">Código #LUCAS-VIP (-5%)</span>
+</div>
+<span class="font-body-md text-body-md font-bold tabular-nums">-$1.600,00 ARS</span>
+</div>
+</div>
+<!-- Total Highlight Banner -->
+<div class="mt-space-md pt-space-md bg-surface-container-lowest/90 rounded-DEFAULT p-space-md flex justify-between items-center">
+<div>
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant block">Total Definitivo</span>
+<span class="font-label-sm text-label-sm text-tertiary font-semibold">Precio final facturado</span>
+</div>
+<div class="text-right">
+<div class="flex items-baseline justify-end gap-1">
+<span class="font-headline-lg text-headline-lg text-primary font-extrabold tabular-nums">$33.536</span>
+<span class="font-label-md text-label-md text-on-surface-variant font-bold">ARS</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Eventify SafePass & Trust Micro-Features -->
+<div class="mx-margin mb-space-md space-y-2">
+<div class="p-space-md rounded-DEFAULT bg-surface-container-low flex items-start gap-3">
+<div class="w-9 h-9 rounded-full bg-tertiary/15 flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px] text-tertiary">published_with_changes</span>
+</div>
+<div>
+<span class="font-label-lg text-label-lg text-on-surface block">Garantía Reembolso Protegido</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Cancelación total sin costo hasta 48hs previas al evento con 1 toque desde tu perfil.</p>
+</div>
+</div>
+<div class="p-space-md rounded-DEFAULT bg-surface-container-low flex items-start gap-3">
+<div class="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px] text-primary">qr_code_scanner</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-lg text-label-lg text-on-surface">Entrada Criptográfica Nominada</span>
+<span class="px-1.5 py-0.2 rounded bg-primary-container text-on-primary-container font-label-sm text-label-sm">SafePass</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Código QR dinámico emitido con tu DNI. Anti-captura y bloqueo estricto de reventa fraudulenta.</p>
+</div>
+</div>
+<div class="p-space-md rounded-DEFAULT bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-9 h-9 rounded-full bg-secondary-fixed-dim/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px] text-secondary">military_tech</span>
+</div>
+<div class="min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface block truncate">+320 XP Nocturnos</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Suma puntos para subir a Rango Nivel 3</span>
+</div>
+</div>
+<span class="px-2 py-1 rounded-full bg-surface-container-high text-secondary font-label-sm text-label-sm font-bold shrink-0">+XP</span>
+</div>
+</div>
+<!-- Payment Selector Section -->
+<div class="mx-margin mb-space-lg">
+<span class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant block mb-space-sm">Método de Pago</span>
+<div class="space-y-space-sm" id="payment-methods">
+<!-- Mercado Pago Option (Selected Default) -->
+<label class="p-space-md rounded-DEFAULT bg-surface-container flex items-center justify-between cursor-pointer transition-all shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-label-lg text-label-lg text-on-surface">Mercado Pago</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary/20 text-tertiary font-label-sm text-label-sm font-bold">Recomendado</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Dinero en cuenta o débito instantáneo</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-[22px] text-primary">bolt</span>
+</label>
+<!-- Credit / Debit Card -->
+<label class="p-space-md rounded-DEFAULT bg-surface-container-low flex items-center justify-between cursor-pointer transition-all opacity-85 hover:opacity-100">
+<div class="flex items-center gap-3">
+<div class="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-lg text-label-lg text-on-surface">Tarjeta de Débito o Crédito</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Visa, Mastercard, Cabal (Hasta 3 cuotas)</span>
+</div>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">credit_card</span>
+</div>
+</label>
+<!-- Split Payment with Squad -->
+<label class="p-space-md rounded-DEFAULT bg-surface-container-low flex items-center justify-between cursor-pointer transition-all opacity-85 hover:opacity-100">
+<div class="flex items-center gap-3">
+<div class="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-lg text-label-lg text-on-surface">Dividir con Amigos</span>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/25 text-primary font-label-sm text-label-sm">Squad Split</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Comparte el link para pagar en grupo</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-[20px] text-primary">group_add</span>
+</label>
+</div>
+<!-- Security Badges Footer -->
+<div class="mt-space-sm flex items-center justify-center gap-4 text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-tertiary">lock</span>
+<span class="font-label-sm text-label-sm">TLS 256-bit Seguro</span>
+</div>
+<span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-tertiary">security</span>
+<span class="font-label-sm text-label-sm">PCI-DSS Certificado</span>
+</div>
+</div>
+</div>
+<!-- Sticky-action Bottom Tray -->
+<div class="sticky bottom-0 left-0 right-0 w-full p-margin bg-surface/95 backdrop-blur-xl z-40">
+<button class="w-full py-4 px-space-md rounded-full bg-gradient-to-r from-primary-container to-primary text-on-primary-container font-headline-sm text-headline-sm font-bold flex items-center justify-center gap-2 shadow-[0_4px_24px_rgba(160,120,255,0.35)] active:scale-[0.98] transition-transform" id="pay-button" type="button">
+<span class="material-symbols-outlined text-[20px]">lock</span>
+<span>Pagar $33.536 ARS con Mercado Pago</span>
+</button>
+<p class="text-center font-body-sm text-body-sm text-on-surface-variant mt-2 max-w-xs mx-auto">
+      Al confirmar aceptas las bases del evento y política antifraude de Eventify. Sin cargos ocultos posteriores.
+    </p>
+</div>
+</div>
+<script>
+  // Countdown Timer Micro-interaction
+  (function() {
+    let timeLeft = 14 * 60 + 32;
+    const timerElement = document.getElementById('reservation-timer');
+    
+    if (timerElement) {
+      const interval = setInterval(function() {
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          timerElement.innerText = "00:00";
+          return;
+        }
+        timeLeft--;
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerElement.innerText = 
+          (minutes < 10 ? "0" + minutes : minutes) + ":" + 
+          (seconds < 10 ? "0" + seconds : seconds);
+      }, 1000);
+    }
+
+    // Interactive Payment Trigger
+    const payBtn = document.getElementById('pay-button');
+    if (payBtn) {
+      payBtn.addEventListener('click', function() {
+        payBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[20px]">progress_activity</span><span>Procesando pago seguro...</span>';
+        payBtn.classList.add('opacity-90');
+        setTimeout(function() {
+          payBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check_circle</span><span>¡Entrada Confirmada!</span>';
+          payBtn.classList.remove('from-primary-container', 'to-primary');
+          payBtn.classList.add('bg-tertiary-container', 'text-on-tertiary-container');
+        }, 1200);
+      });
+    }
+  })();
+</script></main></body></html>
