@@ -9,8 +9,10 @@ import { CreateExperienceScreen } from '../screens/CreateExperienceScreen';
 import { ExperienceDetailScreen } from '../screens/ExperienceDetailScreen';
 import { ExploreScreen } from '../screens/ExploreScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { OrganizerScreen } from '../screens/OrganizerScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SocialScreen } from '../screens/SocialScreen';
+import { WalletScreen } from '../screens/WalletScreen';
 import { AuthSession } from '../types/auth';
 import { Experience } from '../types/experience';
 import { TabKey } from '../types/navigation';
@@ -124,8 +126,12 @@ function renderTab(
           onCreated={onCreatedExperience}
         />
       );
+    case 'wallet':
+      return <WalletScreen session={session} experiences={experiences} onOpenExperience={onOpenExperience} />;
     case 'social':
       return <SocialScreen session={session} experiences={experiences} />;
+    case 'organizer':
+      return <OrganizerScreen session={session} />;
     case 'profile':
       return <ProfileScreen session={session} onLogout={onLogout} onSessionUpdated={onSessionUpdated} />;
   }

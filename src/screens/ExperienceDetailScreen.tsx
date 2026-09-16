@@ -2,7 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { getMyTicket, markInterested, MyTicketResponse, registerForExperience } from '../api/registrations';
+import {
+  cancelExperienceRegistration,
+  getMyTicket,
+  markInterested,
+  MyTicketResponse,
+  registerForExperience,
+  RegistrationResult,
+} from '../api/registrations';
 import { colors } from '../theme/colors';
 import { AuthSession } from '../types/auth';
 import { Experience } from '../types/experience';
@@ -16,6 +23,8 @@ type ExperienceDetailScreenProps = {
 export function ExperienceDetailScreen({ experience, session, onBack }: ExperienceDetailScreenProps) {
   const [interested, setInterested] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [participation, setParticipation] = useState<RegistrationResult | null>(null);
   const [interestLoading, setInterestLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -49,6 +58,7 @@ export function ExperienceDetailScreen({ experience, session, onBack }: Experien
     setActionMessage(null);
 
     if (!canUseApi) {
+      setParticipation(experience.status.toLowerCase().includes('solicitar') ? 'REQUESTED' : 'REGISTERED');
       setActionMessage(experience.status.toLowerCase().includes('solicitar') ? 'Solicitud enviada en modo demo.' : 'Reserva confirmada en modo demo.');
       return;
     }
@@ -56,6 +66,7 @@ export function ExperienceDetailScreen({ experience, session, onBack }: Experien
     setJoining(true);
     try {
       const response = await registerForExperience(session, experience);
+      setParticipation(response.result);
       setActionMessage(messageForRegistration(response.result, response.waitlistPosition));
 
       try {
@@ -70,6 +81,34 @@ export function ExperienceDetailScreen({ experience, session, onBack }: Experien
       setJoining(false);
     }
   }
+
+  async function handleCancelParticipation() {
+    setActionError(null);
+    setActionMessage(null);
+
+    if (!canUseApi) {
+      setParticipation(null);
+      setTicket(null);
+      setActionMessage('Participacion cancelada en modo demo.');
+      return;
+    }
+
+    setCancelling(true);
+    try {
+      const response = await cancelExperienceRegistration(session, experience, participation);
+      setParticipation(null);
+      setTicket(null);
+      setActionMessage(messageForCancellation(response.result));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'No se pudo cancelar la participacion');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  const joined = isJoined(participation);
+  const ctaLabel = joining ? 'Procesando...' : labelForParticipation(participation, experience.status);
+  const cancelLabel = labelForCancel(participation);
 
   return (
     <View style={styles.container}>
@@ -160,9 +199,16 @@ export function ExperienceDetailScreen({ experience, session, onBack }: Experien
           <Text style={styles.priceLabel}>Precio general</Text>
           <Text style={styles.price}>{experience.price}</Text>
         </View>
-        <Pressable style={[styles.ctaButton, joining && styles.disabled]} onPress={handleJoin} disabled={joining}>
-          <Text style={styles.ctaText}>{joining ? 'Procesando...' : experience.status}</Text>
-        </Pressable>
+        <View style={styles.ctaActions}>
+          <Pressable style={[styles.ctaButton, (joining || joined) && styles.disabled]} onPress={handleJoin} disabled={joining || joined}>
+            <Text style={styles.ctaText}>{ctaLabel}</Text>
+          </Pressable>
+          {joined ? (
+            <Pressable style={[styles.cancelButton, cancelling && styles.disabled]} onPress={handleCancelParticipation} disabled={cancelling}>
+              <Text style={styles.cancelText}>{cancelling ? 'Cancelando...' : cancelLabel}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -186,6 +232,51 @@ function messageForRegistration(result: string, waitlistPosition: number | null)
     return 'No cumplis los requisitos para esta experiencia.';
   }
   return `Accion completada: ${result}.`;
+}
+
+function messageForCancellation(result: string) {
+  if (result === 'CANCELLED') {
+    return 'Asistencia cancelada. Tu SafePass fue revocado.';
+  }
+  if (result === 'REQUEST_CANCELLED') {
+    return 'Solicitud cancelada.';
+  }
+  if (result === 'WAITLIST_REMOVED') {
+    return 'Saliste de la lista de espera.';
+  }
+  return 'Participacion cancelada.';
+}
+
+function isJoined(result: RegistrationResult | null) {
+  return result === 'REGISTERED'
+    || result === 'ALREADY_REGISTERED'
+    || result === 'REQUESTED'
+    || result === 'ALREADY_REQUESTED'
+    || result === 'WAITLISTED'
+    || result === 'ALREADY_WAITLISTED';
+}
+
+function labelForParticipation(result: RegistrationResult | null, fallback: string) {
+  if (result === 'REGISTERED' || result === 'ALREADY_REGISTERED') {
+    return 'Asistiras';
+  }
+  if (result === 'REQUESTED' || result === 'ALREADY_REQUESTED') {
+    return 'Solicitud enviada';
+  }
+  if (result === 'WAITLISTED' || result === 'ALREADY_WAITLISTED') {
+    return 'En espera';
+  }
+  return fallback;
+}
+
+function labelForCancel(result: RegistrationResult | null) {
+  if (result === 'REQUESTED' || result === 'ALREADY_REQUESTED') {
+    return 'Cancelar solicitud';
+  }
+  if (result === 'WAITLISTED' || result === 'ALREADY_WAITLISTED') {
+    return 'Salir de espera';
+  }
+  return 'Cancelar asistencia';
 }
 
 function InfoPill({ icon, label, tone }: { icon: keyof typeof Ionicons.glyphMap; label: string; tone: 'success' | 'primary' }) {
@@ -430,6 +521,25 @@ const styles = StyleSheet.create({
   ctaText: {
     color: colors.black,
     fontWeight: '900',
+  },
+  ctaActions: {
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  cancelButton: {
+    minHeight: 38,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: {
+    color: colors.danger,
+    fontWeight: '900',
+    fontSize: 12,
   },
   disabled: {
     opacity: 0.6,

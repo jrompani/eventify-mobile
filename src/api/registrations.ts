@@ -9,6 +9,9 @@ export type RegistrationResult =
   | 'INELIGIBLE'
   | 'INTERESTED'
   | 'REMOVED'
+  | 'CANCELLED'
+  | 'REQUEST_CANCELLED'
+  | 'WAITLIST_REMOVED'
   | string;
 
 export type RegistrationActionResponse = {
@@ -33,6 +36,23 @@ export type MyTicketResponse = {
   usedAt: string | null;
 };
 
+export type WalletTicketResponse = {
+  entitlementId: string;
+  experienceId: string;
+  experienceTitle: string;
+  experienceType: 'PROPOSAL' | 'PLAN' | 'EVENT';
+  experienceStatus: string;
+  startsAt: string;
+  timezone: string;
+  capacity: number | null;
+  registrationId: string;
+  registrationStatus: string;
+  entitlementStatus: string;
+  code: string;
+  issuedAt: string;
+  usedAt: string | null;
+};
+
 export async function markInterested(session: AuthSession, experienceId: string) {
   return apiFetch<RegistrationActionResponse>(`/experiences/${experienceId}/interest`, {
     method: 'POST',
@@ -51,8 +71,27 @@ export async function registerForExperience(session: AuthSession, experience: Ex
   });
 }
 
+export async function cancelExperienceRegistration(session: AuthSession, experience: Experience, result: RegistrationResult | null) {
+  const path = result === 'REQUESTED' || result === 'ALREADY_REQUESTED'
+    ? `/experiences/${experience.id}/requests`
+    : result === 'WAITLISTED' || result === 'ALREADY_WAITLISTED'
+      ? `/experiences/${experience.id}/waitlist`
+      : `/experiences/${experience.id}/registrations`;
+
+  return apiFetch<RegistrationActionResponse>(path, {
+    method: 'DELETE',
+    basicAuth: basicAuthFor(session),
+  });
+}
+
 export async function getMyTicket(session: AuthSession, experienceId: string) {
   return apiFetch<MyTicketResponse>(`/experiences/${experienceId}/my-ticket`, {
+    basicAuth: basicAuthFor(session),
+  });
+}
+
+export async function listMyTickets(session: AuthSession) {
+  return apiFetch<WalletTicketResponse[]>('/me/tickets', {
     basicAuth: basicAuthFor(session),
   });
 }

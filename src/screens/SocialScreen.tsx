@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { ChatMessage, Conversation, listMessages, openGroupConversation, sendMessage } from '../api/chat';
 import { createGroup, EventGroup, joinGroup, listGroups } from '../api/groups';
 import { colors } from '../theme/colors';
 import { AuthSession } from '../types/auth';
@@ -48,6 +49,12 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [joinedGroupIds, setJoinedGroupIds] = useState<string[]>([]);
+  const [activeGroup, setActiveGroup] = useState<EventGroup | null>(null);
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canUseApi = Boolean(targetExperience && isUuid(targetExperience.id));
@@ -131,10 +138,61 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
       }
       setJoinedGroupIds((currentIds) => [...new Set([...currentIds, group.id])]);
       setMessage(`Te sumaste a ${group.name}.`);
+      await handleOpenChat(group);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo entrar al grupo');
     } finally {
       setJoiningId(null);
+    }
+  }
+
+  async function handleOpenChat(group: EventGroup) {
+    setActiveGroup(group);
+    setError(null);
+    setMessage(null);
+
+    if (!canUseApi || !targetExperience || !isUuid(group.id)) {
+      setConversation(null);
+      setMessages(buildDemoMessages(group, session.email));
+      return;
+    }
+
+    setChatLoading(true);
+    try {
+      const nextConversation = await openGroupConversation(session, targetExperience.id, group.id);
+      const nextMessages = await listMessages(session, nextConversation.id);
+      setConversation(nextConversation);
+      setMessages(nextMessages);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo abrir el chat');
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  async function handleSendMessage() {
+    const body = draft.trim();
+    if (!body || !activeGroup) {
+      return;
+    }
+
+    setSending(true);
+    setError(null);
+    try {
+      if (!conversation) {
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          buildDemoMessage(activeGroup.id, session.email, body),
+        ]);
+      } else {
+        const nextMessage = await sendMessage(session, conversation.id, body);
+        setMessages((currentMessages) => [...currentMessages, nextMessage]);
+      }
+      setDraft('');
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo enviar el mensaje');
+    } finally {
+      setSending(false);
     }
   }
 
@@ -186,7 +244,7 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
       {groups.map((group) => {
         const joined = joinedGroupIds.includes(group.id);
         return (
-          <View key={group.id} style={styles.socialRow}>
+          <Pressable key={group.id} style={styles.socialRow} onPress={() => handleOpenChat(group)}>
             <Ionicons name="chatbubbles-outline" size={26} color={colors.primary} style={styles.socialIcon} />
             <View style={styles.socialText}>
               <Text style={styles.rowTitle}>{group.name}</Text>
@@ -202,9 +260,56 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
                 {joined ? 'Dentro' : joiningId === group.id ? '...' : 'Unirme'}
               </Text>
             </Pressable>
-          </View>
+          </Pressable>
         );
       })}
+
+      {activeGroup ? (
+        <View style={styles.chatPanel}>
+          <View style={styles.chatHeader}>
+            <View style={styles.chatTitleCopy}>
+              <Text style={styles.blockTitle}>{activeGroup.name}</Text>
+              <Text style={styles.rowMeta}>{chatLoading ? 'Cargando mensajes...' : `${messages.length} mensajes`}</Text>
+            </View>
+            <Pressable style={styles.closeButton} onPress={() => setActiveGroup(null)}>
+              <Ionicons name="close" size={19} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <View style={styles.messageList}>
+            {messages.length > 0 ? (
+              messages.map((chatMessage) => {
+                const mine = chatMessage.senderEmail === session.email;
+                return (
+                  <View key={chatMessage.id} style={[styles.messageBubble, mine && styles.messageBubbleMine]}>
+                    <Text style={styles.messageSender}>{mine ? 'Vos' : chatMessage.senderEmail}</Text>
+                    <Text style={styles.messageBody}>{chatMessage.body}</Text>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.metaText}>Todavia no hay mensajes.</Text>
+            )}
+          </View>
+
+          <View style={styles.messageComposer}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Escribir mensaje"
+              placeholderTextColor={colors.subtle}
+              style={styles.messageInput}
+            />
+            <Pressable
+              style={[styles.sendButton, (!draft.trim() || sending) && styles.disabled]}
+              onPress={handleSendMessage}
+              disabled={!draft.trim() || sending}
+            >
+              <Ionicons name="send" size={18} color={colors.black} />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -220,6 +325,27 @@ function SummaryPill({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; la
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function buildDemoMessages(group: EventGroup, email: string): ChatMessage[] {
+  return [
+    buildDemoMessage(group.id, 'sofia@eventify.demo', 'Llegamos 22:30 y nos encontramos en la puerta.'),
+    buildDemoMessage(group.id, email, 'Me sumo, avisen si cambian punto de encuentro.'),
+  ];
+}
+
+function buildDemoMessage(groupId: string, senderEmail: string, body: string): ChatMessage {
+  const now = new Date().toISOString();
+  return {
+    id: `demo-message-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    conversationId: `demo-conversation-${groupId}`,
+    senderUserId: 'demo-user',
+    senderEmail,
+    body,
+    status: 'SENT',
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 const styles = StyleSheet.create({
@@ -375,5 +501,84 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: '800',
     lineHeight: 20,
+  },
+  chatPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  chatTitleCopy: {
+    flex: 1,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageList: {
+    minHeight: 130,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: 10,
+    gap: 8,
+  },
+  messageBubble: {
+    maxWidth: '88%',
+    borderRadius: 8,
+    backgroundColor: colors.surfaceElevated,
+    padding: 10,
+    gap: 3,
+  },
+  messageBubbleMine: {
+    alignSelf: 'flex-end',
+    backgroundColor: colors.primarySoft,
+  },
+  messageSender: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  messageBody: {
+    color: colors.text,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  messageComposer: {
+    minHeight: 46,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  messageInput: {
+    flex: 1,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    color: colors.text,
+    paddingHorizontal: 12,
+    fontWeight: '800',
+  },
+  sendButton: {
+    width: 46,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

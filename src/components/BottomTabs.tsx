@@ -8,7 +8,9 @@ export const tabs: Array<{ key: TabKey; label: string; icon: IconName }> = [
   { key: 'home', label: 'Inicio', icon: 'home-outline' },
   { key: 'explore', label: 'Explorar', icon: 'search-outline' },
   { key: 'create', label: 'Crear', icon: 'add-circle-outline' },
+  { key: 'wallet', label: 'Wallet', icon: 'ticket-outline' },
   { key: 'social', label: 'Social', icon: 'chatbubbles-outline' },
+  { key: 'organizer', label: 'Org', icon: 'briefcase-outline' },
   { key: 'profile', label: 'Perfil', icon: 'person-circle-outline' },
 ];
 
