@@ -1,8 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { listMyAttendance, AttendanceRecord } from '../api/attendance';
 import { updateProfile } from '../api/auth';
-import { Capabilities, getCapabilities, getRestrictions, getVerifications, Restriction, Verification } from '../api/identityTrust';
+import { getVerifications, getRestrictions, Restriction, Verification } from '../api/identityTrust';
+import { getProfileOverview, ProfileOverview } from '../api/profile';
+import { getProgression, XpSummary } from '../api/progression';
+import { getReputation, ReputationSummary } from '../api/reputation';
 import { FormBlock } from '../components/FormBlock';
 import { LabeledValue } from '../components/LabeledValue';
 import { colors } from '../theme/colors';
@@ -20,35 +25,51 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
   const [publicZone, setPublicZone] = useState(session.user.profile.publicZone ?? '');
   const [bio, setBio] = useState(session.user.profile.bio ?? '');
   const [saving, setSaving] = useState(false);
-  const [loadingTrust, setLoadingTrust] = useState(false);
-  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [overview, setOverview] = useState<ProfileOverview | null>(null);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [progression, setProgression] = useState<XpSummary | null>(null);
+  const [reputation, setReputation] = useState<ReputationSummary | null>(null);
   const [verifications, setVerifications] = useState<Verification[]>([]);
   const [restrictions, setRestrictions] = useState<Restriction[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [trustError, setTrustError] = useState<string | null>(null);
-  const initials = initialsFor(session.user.profile.displayName || session.user.email);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const user = overview?.user ?? session.user;
+  const capabilities = overview?.capabilities ?? null;
+  const stats = overview?.stats ?? null;
+  const initials = initialsFor(user.profile.displayName || user.email);
 
   useEffect(() => {
-    void loadTrustState();
+    void loadProfileData();
   }, [session.email]);
 
-  async function loadTrustState() {
-    setLoadingTrust(true);
-    setTrustError(null);
+  async function loadProfileData() {
+    setLoadingProfile(true);
+    setProfileError(null);
     try {
-      const [nextCapabilities, nextVerifications, nextRestrictions] = await Promise.all([
-        getCapabilities(session),
+      const [nextOverview, nextVerifications, nextRestrictions, nextAttendance, nextProgression, nextReputation] = await Promise.all([
+        getProfileOverview(session),
         getVerifications(session),
         getRestrictions(session),
+        listMyAttendance(session),
+        getProgression(session),
+        getReputation(session),
       ]);
-      setCapabilities(nextCapabilities);
+      setOverview(nextOverview);
       setVerifications(nextVerifications);
       setRestrictions(nextRestrictions);
+      setAttendance(nextAttendance);
+      setProgression(nextProgression);
+      setReputation(nextReputation);
+      setDisplayName(nextOverview.user.profile.displayName ?? '');
+      setUsername(nextOverview.user.profile.username ?? '');
+      setPublicZone(nextOverview.user.profile.publicZone ?? '');
+      setBio(nextOverview.user.profile.bio ?? '');
     } catch (exception) {
-      setTrustError(exception instanceof Error ? exception.message : 'No se pudo cargar confianza y permisos');
+      setProfileError(exception instanceof Error ? exception.message : 'No se pudo cargar el perfil completo');
     } finally {
-      setLoadingTrust(false);
+      setLoadingProfile(false);
     }
   }
 
@@ -57,7 +78,7 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
     setMessage(null);
     setError(null);
     try {
-      const user = await updateProfile(
+      const updatedUser = await updateProfile(
         { email: session.email, password: session.password },
         {
           displayName: displayName.trim() || session.user.email,
@@ -66,8 +87,10 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
           bio: bio.trim() || undefined,
         }
       );
-      onSessionUpdated({ ...session, user });
+      onSessionUpdated({ ...session, user: updatedUser });
+      setOverview((current) => current ? { ...current, user: updatedUser } : current);
       setMessage('Perfil actualizado.');
+      await loadProfileData();
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo actualizar el perfil');
     } finally {
@@ -82,40 +105,83 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
           <Text style={styles.profileAvatarText}>{initials}</Text>
         </View>
         <View style={styles.profileCopy}>
-          <Text style={styles.screenTitle}>{session.user.profile.displayName || session.user.email}</Text>
-          <Text style={styles.rowMeta}>{session.user.profile.username ?? session.user.email}</Text>
+          <Text style={styles.screenTitle}>{user.profile.displayName || user.email}</Text>
+          <Text style={styles.rowMeta}>{user.profile.username ?? user.email}</Text>
         </View>
+        <Pressable style={styles.iconButton} onPress={loadProfileData} disabled={loadingProfile}>
+          <Ionicons name="refresh" size={18} color={colors.primary} />
+        </Pressable>
       </View>
 
+      {loadingProfile ? <Text style={styles.metaText}>Sincronizando perfil...</Text> : null}
+      {profileError ? <RetryMessage message={profileError} onRetry={loadProfileData} /> : null}
+
       <FormBlock>
-        <LabeledValue label="Zona publica" value={session.user.profile.publicZone ?? 'No configurada'} />
-        <LabeledValue label="Entradas activas" value="1" />
-        <LabeledValue label="Asistencias verificadas" value="4" />
+        <LabeledValue label="Zona publica" value={user.profile.publicZone ?? 'No configurada'} />
+        <LabeledValue label="Entradas activas" value={`${stats?.activeTicketCount ?? 0}`} />
+        <LabeledValue label="Asistencias verificadas" value={`${stats?.checkedInCount ?? reputation?.attendedCount ?? 0}`} />
+        <LabeledValue label="Experiencias creadas" value={`${stats?.createdExperienceCount ?? 0}`} />
+        <LabeledValue label="Notificaciones sin leer" value={`${stats?.unreadNotificationCount ?? 0}`} />
         <LabeledValue label="Restricciones activas" value={`${restrictions.length}`} />
       </FormBlock>
+
+      <View style={styles.statsGrid}>
+        <StatCard icon="flash-outline" label="Nivel" value={`${progression?.level ?? 1}`} detail={`${progression?.totalXp ?? 0} XP`} />
+        <StatCard icon="shield-checkmark-outline" label="Reputacion" value={`${reputation?.reputationScore ?? 50}`} detail={bandLabel(reputation?.reputationBand)} />
+        <StatCard icon="checkmark-done-outline" label="Asistencias" value={`${reputation?.attendedCount ?? 0}`} detail={`${reputation?.noShowCount ?? 0} no-show`} />
+        <StatCard icon="ticket-outline" label="Registrado" value={`${stats?.registeredExperienceCount ?? 0}`} detail="experiencias" />
+      </View>
+
+      <View style={styles.editor}>
+        <View style={styles.blockHeader}>
+          <Text style={styles.blockTitle}>Progreso</Text>
+          <Text style={styles.blockMeta}>{progression ? `${progression.currentLevelXp}/${progression.nextLevelXp} XP` : 'Sin datos'}</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progressPercent(progression)}%` }]} />
+        </View>
+        {progression?.recentEntries.length ? (
+          progression.recentEntries.slice(0, 3).map((entry) => (
+            <Text key={entry.id} style={styles.listLine}>
+              {entry.points > 0 ? '+' : ''}{entry.points} XP - {entry.reason}
+            </Text>
+          ))
+        ) : (
+          <Text style={styles.metaText}>Todavia no hay movimientos de XP.</Text>
+        )}
+      </View>
+
+      <View style={styles.editor}>
+        <Text style={styles.blockTitle}>Asistencia verificada</Text>
+        {attendance.length > 0 ? (
+          attendance.slice(0, 4).map((record) => (
+            <View key={record.id} style={styles.attendanceRow}>
+              <View style={styles.attendanceIcon}>
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.success} />
+              </View>
+              <View style={styles.attendanceCopy}>
+                <Text style={styles.rowTitle}>{record.experienceTitle}</Text>
+                <Text style={styles.rowMeta}>{record.status} - {record.evidenceType} - {formatDate(record.recordedAt)}</Text>
+              </View>
+              <Text style={styles.evidencePill}>{record.evidenceStrength}%</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.metaText}>Cuando hagas check-in, tu asistencia aparece aca.</Text>
+        )}
+      </View>
 
       <View style={styles.editor}>
         <View style={styles.blockHeader}>
           <Text style={styles.blockTitle}>Confianza y permisos</Text>
-          <Pressable style={styles.iconButton} onPress={loadTrustState} disabled={loadingTrust}>
-            <Text style={styles.iconButtonText}>↻</Text>
-          </Pressable>
+          <Text style={styles.blockMeta}>{capabilities?.requiresReview ? 'Requiere revision' : 'Activo'}</Text>
         </View>
-        {loadingTrust ? <Text style={styles.metaText}>Cargando permisos...</Text> : null}
-        {trustError ? (
-          <View style={styles.retryBox}>
-            <Text style={styles.errorText}>{trustError}</Text>
-            <Pressable style={styles.retryButton} onPress={loadTrustState}>
-              <Text style={styles.retryText}>Reintentar</Text>
-            </Pressable>
-          </View>
-        ) : null}
         {capabilities ? (
           <View style={styles.capabilityGrid}>
             <Capability label="Registro" enabled={capabilities.canRegister} />
             <Capability label="Crear" enabled={capabilities.canCreateExperience} />
             <Capability label="Chat" enabled={capabilities.canUseChat} />
-            <Capability label="Verified" enabled={capabilities.canAccessVerifiedOnly} />
+            <Capability label="Check-in" enabled={capabilities.canCheckIn} />
           </View>
         ) : null}
         <View style={styles.chipRow}>
@@ -190,12 +256,34 @@ function Field({ label, value, onChangeText, placeholder, multiline }: FieldProp
   );
 }
 
+function StatCard({ icon, label, value, detail }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; detail: string }) {
+  return (
+    <View style={styles.statCard}>
+      <Ionicons name={icon} size={18} color={colors.primary} />
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statDetail}>{detail}</Text>
+    </View>
+  );
+}
+
 function Capability({ label, enabled }: { label: string; enabled: boolean }) {
   return (
     <View style={[styles.capability, enabled ? styles.capabilityOn : styles.capabilityOff]}>
       <Text style={[styles.capabilityText, enabled ? styles.capabilityTextOn : styles.capabilityTextOff]}>
         {label}: {enabled ? 'OK' : 'Bloqueado'}
       </Text>
+    </View>
+  );
+}
+
+function RetryMessage({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <View style={styles.retryBox}>
+      <Text style={styles.errorText}>{message}</Text>
+      <Pressable style={styles.retryButton} onPress={onRetry}>
+        <Text style={styles.retryText}>Reintentar</Text>
+      </Pressable>
     </View>
   );
 }
@@ -207,6 +295,39 @@ function initialsFor(value: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+}
+
+function progressPercent(progression: XpSummary | null) {
+  if (!progression || progression.nextLevelXp <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round((progression.currentLevelXp / progression.nextLevelXp) * 100)));
+}
+
+function bandLabel(value: string | undefined) {
+  if (value === 'TRUSTED') {
+    return 'Confiable';
+  }
+  if (value === 'POSITIVE') {
+    return 'Positiva';
+  }
+  if (value === 'NEEDS_REVIEW') {
+    return 'En revision';
+  }
+  return 'Inicial';
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Fecha no disponible';
+  }
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 const styles = StyleSheet.create({
@@ -245,9 +366,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
   },
+  rowTitle: {
+    color: colors.text,
+    fontWeight: '900',
+  },
   rowMeta: {
     color: colors.muted,
     marginTop: 3,
+    fontWeight: '700',
   },
   editor: {
     backgroundColor: colors.surface,
@@ -262,6 +388,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
   },
+  blockMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   blockHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -269,8 +400,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   iconButton: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 8,
     borderColor: colors.border,
     borderWidth: 1,
@@ -278,10 +409,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconButtonText: {
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statCard: {
+    width: '48%',
+    minHeight: 112,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: 12,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  statValue: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  statLabel: {
+    color: colors.muted,
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  statDetail: {
     color: colors.primary,
     fontWeight: '900',
-    fontSize: 16,
+    fontSize: 12,
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.border,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+  },
+  attendanceRow: {
+    minHeight: 62,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  attendanceIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attendanceCopy: {
+    flex: 1,
+  },
+  evidencePill: {
+    color: colors.success,
+    backgroundColor: colors.successSoft,
+    borderColor: '#16533F',
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    fontWeight: '900',
+    fontSize: 11,
   },
   capabilityGrid: {
     flexDirection: 'row',
@@ -365,6 +569,11 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: colors.muted,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  listLine: {
+    color: colors.text,
     fontWeight: '800',
     lineHeight: 20,
   },
