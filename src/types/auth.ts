@@ -1,10 +1,13 @@
-export type UserStatus = 'ACTIVE' | 'DISABLED';
+export type UserStatus = 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED';
 
 export type UserProfile = {
   displayName: string;
   username: string | null;
   bio: string | null;
   publicZone: string | null;
+  avatarUrl: string | null;
+  birthYear: number | null;
+  interests: string[];
 };
 
 export type User = {
@@ -17,10 +20,12 @@ export type User = {
 
 export type AuthResponse = {
   user: User;
+  accessToken: string;
 };
 
 export type AuthSession = {
   email: string;
-  password: string;
+  password?: string;
+  accessToken?: string;
   user: User;
 };

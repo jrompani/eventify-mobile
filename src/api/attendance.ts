@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type AttendanceRecord = {
@@ -16,13 +17,6 @@ export type AttendanceRecord = {
 
 export async function listMyAttendance(session: AuthSession) {
   return apiFetch<AttendanceRecord[]>('/me/attendance', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

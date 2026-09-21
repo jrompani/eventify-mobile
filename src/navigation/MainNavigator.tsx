@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as ExpoLocation from 'expo-location';
 import { StyleSheet, View } from 'react-native';
 
 import { listExperiences } from '../api/experiences';
+import { listMyNotifications } from '../api/notifications';
 import { AppHeader } from '../components/AppHeader';
-import { BottomTabs, tabs } from '../components/BottomTabs';
+import { BottomTabs } from '../components/BottomTabs';
 import { experiences as fallbackExperiences } from '../data/mockExperiences';
+import { Coordinate, enrichExperiencesWithDistance } from '../location/distance';
 import { CreateExperienceScreen } from '../screens/CreateExperienceScreen';
 import { ExperienceDetailScreen } from '../screens/ExperienceDetailScreen';
 import { ExploreScreen } from '../screens/ExploreScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { OrganizerScreen } from '../screens/OrganizerScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SocialScreen } from '../screens/SocialScreen';
@@ -26,37 +30,47 @@ type MainNavigatorProps = {
 export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavigatorProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [selectedExperience, setSelectedExperience] = useState<Experience | null>(null);
+  const [selectedOrganizerExperienceId, setSelectedOrganizerExperienceId] = useState<string | null>(null);
   const [experiences, setExperiences] = useState<Experience[]>(fallbackExperiences);
   const [loadingExperiences, setLoadingExperiences] = useState(false);
   const [experienceError, setExperienceError] = useState<string | null>(null);
-  const title = useMemo(() => tabs.find((tab) => tab.key === activeTab)?.label ?? 'Eventify', [activeTab]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [userCoordinate, setUserCoordinate] = useState<Coordinate | null>(null);
+  const visibleExperiences = useMemo(
+    () => enrichExperiencesWithDistance(experiences, userCoordinate),
+    [experiences, userCoordinate]
+  );
+  const handleUnreadCountChange = useCallback((count: number) => {
+    setUnreadNotifications(count);
+  }, []);
 
   function handleCreatedExperience(experience: Experience) {
     setExperiences((currentExperiences) => [
       experience,
       ...currentExperiences.filter((currentExperience) => currentExperience.id !== experience.id),
     ]);
+    setSelectedOrganizerExperienceId(experience.id);
     setSelectedExperience(experience);
+  }
+
+  async function refreshExperiences() {
+    setLoadingExperiences(true);
+    setExperienceError(null);
+    try {
+      const nextExperiences = await listExperiences();
+      setExperiences(nextExperiences.length > 0 ? nextExperiences : fallbackExperiences);
+    } catch (error) {
+      setExperienceError(error instanceof Error ? error.message : 'No se pudo cargar experiencias');
+    } finally {
+      setLoadingExperiences(false);
+    }
   }
 
   useEffect(() => {
     let mounted = true;
     async function fetchExperiences() {
-      setLoadingExperiences(true);
-      setExperienceError(null);
-      try {
-        const nextExperiences = await listExperiences();
-        if (mounted && nextExperiences.length > 0) {
-          setExperiences(nextExperiences);
-        }
-      } catch (error) {
-        if (mounted) {
-          setExperienceError(error instanceof Error ? error.message : 'No se pudo cargar experiencias');
-        }
-      } finally {
-        if (mounted) {
-          setLoadingExperiences(false);
-        }
+      if (mounted) {
+        await refreshExperiences();
       }
     }
     fetchExperiences();
@@ -65,33 +79,98 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUserLocation() {
+      try {
+        const permission = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (permission.status !== 'granted') {
+          return;
+        }
+        const position = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+        if (mounted) {
+          setUserCoordinate({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        }
+      } catch {
+        if (mounted) {
+          setUserCoordinate(null);
+        }
+      }
+    }
+
+    void loadUserLocation();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchNotificationCount() {
+      try {
+        const notifications = await listMyNotifications(session);
+        if (mounted) {
+          setUnreadNotifications(notifications.filter((notification) => !notification.readAt).length);
+        }
+      } catch {
+        if (mounted) {
+          setUnreadNotifications(0);
+        }
+      }
+    }
+
+    void fetchNotificationCount();
+    return () => {
+      mounted = false;
+    };
+  }, [session]);
+
   if (selectedExperience) {
     return (
       <ExperienceDetailScreen
         experience={selectedExperience}
         session={session}
         onBack={() => setSelectedExperience(null)}
+        onOpenOrganizer={() => {
+          setSelectedOrganizerExperienceId(selectedExperience.id);
+          setSelectedExperience(null);
+          setActiveTab('organizer');
+        }}
+        onOpenWallet={() => {
+          setSelectedExperience(null);
+          setActiveTab('wallet');
+        }}
       />
     );
   }
 
   return (
     <View style={styles.container}>
-      <AppHeader title={title} />
+      <AppHeader user={session.user} />
       <View style={styles.content}>
         {renderTab(
           activeTab,
           setSelectedExperience,
-          experiences,
+          visibleExperiences,
           loadingExperiences,
           experienceError,
           session,
           onLogout,
           onSessionUpdated,
-          handleCreatedExperience
+          handleCreatedExperience,
+          handleUnreadCountChange,
+          setActiveTab,
+          userCoordinate,
+          selectedOrganizerExperienceId,
+          refreshExperiences
         )}
       </View>
-      <BottomTabs activeTab={activeTab} onChange={setActiveTab} />
+      <BottomTabs activeTab={activeTab} onChange={setActiveTab} badges={{ notifications: unreadNotifications }} />
     </View>
   );
 }
@@ -105,7 +184,12 @@ function renderTab(
   session: AuthSession,
   onLogout: () => void,
   onSessionUpdated: (session: AuthSession) => void,
-  onCreatedExperience: (experience: Experience) => void
+  onCreatedExperience: (experience: Experience) => void,
+  onUnreadCountChange: (count: number) => void,
+  onChangeTab: (tab: TabKey) => void,
+  userCoordinate: Coordinate | null,
+  selectedOrganizerExperienceId: string | null,
+  onRefreshExperiences: () => void
 ) {
   switch (activeTab) {
     case 'home':
@@ -115,10 +199,15 @@ function renderTab(
           loading={loadingExperiences}
           error={experienceError}
           onOpenExperience={onOpenExperience}
+          onGoCreate={() => onChangeTab('create')}
+          onGoOrganizer={() => onChangeTab('organizer')}
+          onGoWallet={() => onChangeTab('wallet')}
+          onRefresh={onRefreshExperiences}
+          activeUserLabel={session.user.profile.displayName || session.email}
         />
       );
     case 'explore':
-      return <ExploreScreen experiences={experiences} onOpenExperience={onOpenExperience} />;
+      return <ExploreScreen session={session} experiences={experiences} userCoordinate={userCoordinate} onOpenExperience={onOpenExperience} />;
     case 'create':
       return (
         <CreateExperienceScreen
@@ -128,10 +217,12 @@ function renderTab(
       );
     case 'wallet':
       return <WalletScreen session={session} experiences={experiences} onOpenExperience={onOpenExperience} />;
+    case 'notifications':
+      return <NotificationsScreen session={session} onUnreadCountChange={onUnreadCountChange} />;
     case 'social':
       return <SocialScreen session={session} experiences={experiences} />;
     case 'organizer':
-      return <OrganizerScreen session={session} />;
+      return <OrganizerScreen session={session} preferredExperienceId={selectedOrganizerExperienceId} />;
     case 'profile':
       return <ProfileScreen session={session} onLogout={onLogout} onSessionUpdated={onSessionUpdated} />;
   }

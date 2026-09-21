@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type EventGroup = {
@@ -27,14 +28,14 @@ export type GroupMember = {
 
 export async function listGroups(session: AuthSession, experienceId: string) {
   return apiFetch<EventGroup[]>(`/experiences/${experienceId}/groups`, {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function createGroup(session: AuthSession, experienceId: string, name: string, description: string) {
   return apiFetch<EventGroup>(`/experiences/${experienceId}/groups`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
     body: JSON.stringify({
       name,
       description,
@@ -45,13 +46,6 @@ export async function createGroup(session: AuthSession, experienceId: string, na
 export async function joinGroup(session: AuthSession, experienceId: string, groupId: string) {
   return apiFetch<GroupMember>(`/experiences/${experienceId}/groups/${groupId}/members`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

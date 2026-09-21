@@ -1,31 +1,42 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
+import { User } from '../types/auth';
+import { initialsFor } from '../utils/format';
 
 type AppHeaderProps = {
-  title: string;
+  user: User;
 };
 
-export function AppHeader({ title }: AppHeaderProps) {
+export function AppHeader({ user }: AppHeaderProps) {
+  const initials = initialsFor(user.profile.displayName || user.email);
+
   return (
     <View style={styles.header}>
-      <View>
+      <View style={styles.brandRow}>
+        <View style={styles.logoMark}>
+          <View style={styles.logoSpark} />
+          <Text style={styles.logoText}>E</Text>
+        </View>
         <Text style={styles.brand}>Eventify</Text>
-        <Text style={styles.title}>{title}</Text>
       </View>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>JC</Text>
-      </View>
+      {user.profile.avatarUrl ? (
+        <Image source={{ uri: user.profile.avatarUrl }} style={styles.avatarImage} />
+      ) : (
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
-    minHeight: 80,
+    minHeight: 66,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
     backgroundColor: colors.black,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
@@ -33,16 +44,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  brand: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  title: {
+  logoMark: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  logoSpark: {
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.warning,
+  },
+  logoText: {
+    color: colors.black,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  brand: {
     color: colors.text,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     letterSpacing: 0,
   },
@@ -59,5 +91,13 @@ const styles = StyleSheet.create({
   avatarText: {
     color: colors.primary,
     fontWeight: '900',
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderColor: colors.primary,
+    borderWidth: 1,
+    backgroundColor: colors.primarySoft,
   },
 });

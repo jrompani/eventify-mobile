@@ -14,6 +14,12 @@ export const experiences: Experience[] = [
     trustLabel: 'Entrada disponible',
     imageUrl: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=900&q=80',
     tags: ['Showcase oficial', '+18', 'Electronica'],
+    location: {
+      label: 'Costanera Norte',
+      addressPublic: 'Costanera Norte, Buenos Aires',
+      latPublic: -34.5489,
+      lngPublic: -58.4298,
+    },
   },
   {
     id: '2',
@@ -28,6 +34,12 @@ export const experiences: Experience[] = [
     trustLabel: '4 cupos libres',
     imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=900&q=80',
     tags: ['Plan social', 'Rooftop', 'Palermo'],
+    location: {
+      label: 'Palermo Soho',
+      addressPublic: 'Palermo Soho, Buenos Aires',
+      latPublic: -34.5889,
+      lngPublic: -58.4306,
+    },
   },
   {
     id: '3',
@@ -42,5 +54,11 @@ export const experiences: Experience[] = [
     trustLabel: 'SafePass activo',
     imageUrl: 'https://images.unsplash.com/photo-1571266028243-d220c9c4f0d6?auto=format&fit=crop&w=900&q=80',
     tags: ['Ultimas entradas', 'Industrial', '+18'],
+    location: {
+      label: 'Palermo Soho',
+      addressPublic: 'Palermo Soho, Buenos Aires',
+      latPublic: -34.5862,
+      lngPublic: -58.4259,
+    },
   },
 ];

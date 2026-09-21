@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type OrganizerEventSummary = {
@@ -64,6 +65,8 @@ export type OrganizerStaff = {
   updatedAt: string;
 };
 
+export type OrganizerStaffRole = 'OWNER_ASSISTANT' | 'CHECKIN_STAFF';
+
 export type OrganizerTicketProduct = {
   id: string;
   name: string;
@@ -107,6 +110,17 @@ export type CheckInResponse = {
   checkedByUserId: string;
 };
 
+export type CheckInRosterEntry = {
+  registrationId: string;
+  userId: string;
+  userEmail: string;
+  registrationStatus: string;
+  checkedIn: boolean;
+  checkInId: string | null;
+  checkedAt: string | null;
+  checkedByUserId: string | null;
+};
+
 export type RegistrationActionResponse = {
   result: string;
   experienceId: string;
@@ -120,41 +134,76 @@ export type RegistrationActionResponse = {
 
 export async function listOrganizerEvents(session: AuthSession) {
   return apiFetch<OrganizerEventPage>('/organizer/events?page=0&size=20', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function getOrganizerDashboard(session: AuthSession, experienceId: string) {
   return apiFetch<OrganizerDashboard>(`/organizer/events/${experienceId}/dashboard`, {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function approveOrganizerRequest(session: AuthSession, experienceId: string, requestId: string) {
   return apiFetch<RegistrationActionResponse>(`/organizer/events/${experienceId}/requests/${requestId}/approve`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function rejectOrganizerRequest(session: AuthSession, experienceId: string, requestId: string) {
   return apiFetch<RegistrationActionResponse>(`/organizer/events/${experienceId}/requests/${requestId}/reject`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function checkInByEntitlementCode(session: AuthSession, experienceId: string, entitlementCode: string) {
   return apiFetch<CheckInResponse>(`/organizer/events/${experienceId}/check-ins`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
     body: JSON.stringify({ entitlementCode }),
   });
 }
 
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
+export async function checkInByRegistrationId(session: AuthSession, experienceId: string, registrationId: string) {
+  return apiFetch<CheckInResponse>(`/organizer/events/${experienceId}/check-ins`, {
+    method: 'POST',
+    ...authOptionsFor(session),
+    body: JSON.stringify({ registrationId }),
+  });
+}
+
+export async function checkInByUserId(session: AuthSession, experienceId: string, userId: string) {
+  return apiFetch<CheckInResponse>(`/organizer/events/${experienceId}/check-ins`, {
+    method: 'POST',
+    ...authOptionsFor(session),
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function listCheckInRoster(session: AuthSession, experienceId: string) {
+  return apiFetch<CheckInRosterEntry[]>(`/organizer/events/${experienceId}/check-ins`, {
+    ...authOptionsFor(session),
+  });
+}
+
+export async function addOrganizerStaff(
+  session: AuthSession,
+  experienceId: string,
+  userId: string,
+  role: OrganizerStaffRole
+) {
+  return apiFetch<OrganizerStaff>(`/organizer/events/${experienceId}/staff`, {
+    method: 'POST',
+    ...authOptionsFor(session),
+    body: JSON.stringify({ userId, role }),
+  });
+}
+
+export async function removeOrganizerStaff(session: AuthSession, experienceId: string, userId: string) {
+  return apiFetch<OrganizerStaff>(`/organizer/events/${experienceId}/staff/${userId}`, {
+    method: 'DELETE',
+    ...authOptionsFor(session),
+  });
 }

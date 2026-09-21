@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type Conversation = {
@@ -31,13 +32,13 @@ type MessagePage = {
 export async function openGroupConversation(session: AuthSession, experienceId: string, groupId: string) {
   return apiFetch<Conversation>(`/experiences/${experienceId}/groups/${groupId}/conversation`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function listMessages(session: AuthSession, conversationId: string) {
   const page = await apiFetch<MessagePage>(`/conversations/${conversationId}/messages?limit=30`, {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
   return page.items;
 }
@@ -45,14 +46,7 @@ export async function listMessages(session: AuthSession, conversationId: string)
 export async function sendMessage(session: AuthSession, conversationId: string, body: string) {
   return apiFetch<ChatMessage>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
     body: JSON.stringify({ body }),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

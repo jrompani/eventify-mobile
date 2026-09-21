@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { EmptyState } from '../components/EmptyState';
 import { ExperienceCard } from '../components/ExperienceCard';
 import { colors } from '../theme/colors';
 import { Experience } from '../types/experience';
@@ -10,14 +11,39 @@ type HomeScreenProps = {
   loading: boolean;
   error: string | null;
   onOpenExperience: (experience: Experience) => void;
+  onGoCreate: () => void;
+  onGoOrganizer: () => void;
+  onGoWallet: () => void;
+  onRefresh: () => void;
+  activeUserLabel: string;
 };
 
-export function HomeScreen({ experiences, loading, error, onOpenExperience }: HomeScreenProps) {
+export function HomeScreen({
+  experiences,
+  loading,
+  error,
+  onOpenExperience,
+  onGoCreate,
+  onGoOrganizer,
+  onGoWallet,
+  onRefresh,
+  activeUserLabel,
+}: HomeScreenProps) {
   return (
     <FlatList
       data={experiences}
       keyExtractor={(item) => item.id}
-      ListHeaderComponent={<HomeHeader loading={loading} error={error} />}
+      ListHeaderComponent={(
+        <HomeHeader
+          loading={loading}
+          error={error}
+          onGoCreate={onGoCreate}
+          onGoOrganizer={onGoOrganizer}
+          onGoWallet={onGoWallet}
+          onRefresh={onRefresh}
+          activeUserLabel={activeUserLabel}
+        />
+      )}
       contentContainerStyle={styles.listContent}
       renderItem={({ item, index }) => (
         <View style={styles.cardSection}>
@@ -26,18 +52,53 @@ export function HomeScreen({ experiences, loading, error, onOpenExperience }: Ho
           <ExperienceCard experience={item} onPress={onOpenExperience} />
         </View>
       )}
+      ListEmptyComponent={(
+        <EmptyState
+          icon="calendar-clear-outline"
+          title="No hay experiencias disponibles"
+          message="Crea la primera experiencia o actualiza para intentar sincronizar con la API."
+          actionLabel="Crear experiencia"
+          onAction={onGoCreate}
+        />
+      )}
       ListFooterComponent={<CommunityPreview />}
     />
   );
 }
 
-function HomeHeader({ loading, error }: { loading: boolean; error: string | null }) {
+function HomeHeader({
+  loading,
+  error,
+  onGoCreate,
+  onGoOrganizer,
+  onGoWallet,
+  onRefresh,
+  activeUserLabel,
+}: {
+  loading: boolean;
+  error: string | null;
+  onGoCreate: () => void;
+  onGoOrganizer: () => void;
+  onGoWallet: () => void;
+  onRefresh: () => void;
+  activeUserLabel: string;
+}) {
   return (
     <View style={styles.headerStack}>
+      <View style={styles.accountBar}>
+        <View style={styles.accountCopy}>
+          <Text style={styles.accountLabel}>Sesion activa</Text>
+          <Text style={styles.accountName} numberOfLines={1}>{activeUserLabel}</Text>
+        </View>
+        <Pressable style={styles.refreshButton} onPress={onRefresh} disabled={loading}>
+          <Ionicons name="refresh" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+
       <View style={styles.locationRow}>
         <View style={styles.locationPill}>
           <Ionicons name="location-outline" size={15} color={colors.primary} />
-          <Text style={styles.locationText}>Palermo, BA</Text>
+          <Text style={styles.locationText}>Cerca tuyo</Text>
         </View>
         <View style={styles.statusPill}>
           <View style={styles.statusDot} />
@@ -78,6 +139,21 @@ function HomeHeader({ loading, error }: { loading: boolean; error: string | null
           </Text>
         </View>
       </View>
+
+      <View style={styles.actionGrid}>
+        <Pressable style={styles.actionButton} onPress={onGoCreate}>
+          <Ionicons name="add-circle-outline" size={19} color={colors.black} />
+          <Text style={styles.actionButtonText}>Crear evento</Text>
+        </Pressable>
+        <Pressable style={styles.actionButtonAlt} onPress={onGoOrganizer}>
+          <Ionicons name="scan-outline" size={19} color={colors.primary} />
+          <Text style={styles.actionButtonAltText}>Operar puerta</Text>
+        </Pressable>
+        <Pressable style={styles.actionButtonAlt} onPress={onGoWallet}>
+          <Ionicons name="ticket-outline" size={19} color={colors.primary} />
+          <Text style={styles.actionButtonAltText}>Ver Wallet</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -97,8 +173,8 @@ function CommunityPreview() {
       <View style={styles.communityTop}>
         <Ionicons name="people-circle-outline" size={26} color={colors.success} />
         <View style={styles.communityCopy}>
-          <Text style={styles.communityTitle}>Comunidad activa cerca tuyo</Text>
-          <Text style={styles.communityMeta}>Techno Buenos Aires - 420 miembros</Text>
+          <Text style={styles.communityTitle}>Grupos activos de tus eventos</Text>
+          <Text style={styles.communityMeta}>Crea o unite a grupos desde Social.</Text>
         </View>
       </View>
       <Pressable style={styles.communityButton}>
@@ -122,6 +198,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
+  },
+  accountBar: {
+    minHeight: 58,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  accountCopy: {
+    flex: 1,
+  },
+  accountLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  accountName: {
+    color: colors.text,
+    marginTop: 3,
+    fontWeight: '900',
+  },
+  refreshButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locationPill: {
     flexDirection: 'row',
@@ -215,6 +326,44 @@ const styles = StyleSheet.create({
   },
   safeCopy: {
     flex: 1,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+    paddingHorizontal: 8,
+  },
+  actionButtonText: {
+    color: colors.black,
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  actionButtonAlt: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+    paddingHorizontal: 8,
+  },
+  actionButtonAltText: {
+    color: colors.primary,
+    fontWeight: '900',
+    fontSize: 12,
   },
   safeTitle: {
     color: colors.text,

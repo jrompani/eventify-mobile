@@ -1,19 +1,33 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ExpoLocation from 'expo-location';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import MapView, { Marker, Region } from 'react-native-maps';
 
+import { searchPlaces, PlaceResult } from '../api/places';
+import { EmptyState } from '../components/EmptyState';
 import { ExperienceCard } from '../components/ExperienceCard';
+import { Coordinate, experienceCoordinate, hasExperienceCoordinates } from '../location/distance';
 import { colors } from '../theme/colors';
+import { AuthSession } from '../types/auth';
 import { Experience } from '../types/experience';
 
 type ExploreScreenProps = {
+  session: AuthSession;
   experiences: Experience[];
+  userCoordinate: Coordinate | null;
   onOpenExperience: (experience: Experience) => void;
 };
 
-export function ExploreScreen({ experiences, onOpenExperience }: ExploreScreenProps) {
+export function ExploreScreen({ session, experiences, userCoordinate: initialUserCoordinate, onOpenExperience }: ExploreScreenProps) {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'Radar & lista' | 'Lista pura' | 'Mapa radar'>('Radar & lista');
+  const [userCoordinate, setUserCoordinate] = useState<Coordinate | null>(initialUserCoordinate);
+  const [places, setPlaces] = useState<PlaceResult[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placesError, setPlacesError] = useState<string | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+  const mapRef = useRef<MapView | null>(null);
   const filteredExperiences = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
@@ -34,9 +48,86 @@ export function ExploreScreen({ experiences, onOpenExperience }: ExploreScreenPr
   }, [experiences, query]);
   const showRadar = mode !== 'Lista pura';
   const showList = mode !== 'Mapa radar';
+  const mappedExperiences = useMemo(() => filteredExperiences.filter(hasExperienceCoordinates), [filteredExperiences]);
+  const region = useMemo(() => buildRegion(mappedExperiences, places, userCoordinate), [mappedExperiences, places, userCoordinate]);
+
+  useEffect(() => {
+    setUserCoordinate(initialUserCoordinate);
+  }, [initialUserCoordinate]);
+
+  useEffect(() => {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) {
+      setPlaces([]);
+      setPlacesError(null);
+      setPlacesLoading(false);
+      return;
+    }
+
+    let mounted = true;
+    setPlacesLoading(true);
+    const timeout = setTimeout(() => {
+      searchPlaces(session, normalizedQuery, userCoordinate)
+        .then((results) => {
+          if (mounted) {
+            setPlaces(results);
+            setPlacesError(null);
+          }
+        })
+        .catch((exception) => {
+          if (mounted) {
+            setPlaces([]);
+            setPlacesError(exception instanceof Error ? exception.message : 'No se pudo buscar lugares');
+          }
+        })
+        .finally(() => {
+          if (mounted) {
+            setPlacesLoading(false);
+          }
+        });
+    }, 350);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
+  }, [query, session, userCoordinate]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadLocation() {
+      try {
+        const permission = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (permission.status !== 'granted') {
+          return;
+        }
+        const position = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+        if (mounted) {
+          setUserCoordinate({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        }
+      } catch {
+        if (mounted) {
+          setUserCoordinate(null);
+        }
+      }
+    }
+
+    void loadLocation();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function recenterMap() {
+    mapRef.current?.animateToRegion(region, 350);
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.listContent}>
+    <ScrollView contentContainerStyle={styles.listContent} scrollEnabled={scrollEnabled}>
       <View style={styles.searchBox}>
         <Ionicons name="search-outline" size={22} color={colors.primary} />
         <TextInput
@@ -64,16 +155,85 @@ export function ExploreScreen({ experiences, onOpenExperience }: ExploreScreenPr
       {showRadar ? (
         <View style={styles.radarCard}>
           <View style={styles.radarHeader}>
-            <Text style={styles.radarTitle}>GPS activo - Palermo Soho</Text>
-            <Text style={styles.radarBadge}>{filteredExperiences.length} en vivo</Text>
+            <View>
+              <Text style={styles.radarTitle}>{userCoordinate ? 'GPS activo' : 'Mapa publico'}</Text>
+              <Text style={styles.radarMeta}>
+                {placesLoading ? 'Buscando lugares...' : userCoordinate ? 'Ordenado por cercania' : 'Activa GPS para distancias reales'}
+              </Text>
+            </View>
+            <View style={styles.radarHeaderActions}>
+              <Text style={styles.radarBadge}>{mappedExperiences.length} eventos · {places.length} lugares</Text>
+              {Platform.OS !== 'web' ? (
+                <Pressable style={styles.recenterButton} onPress={recenterMap}>
+                  <Ionicons name="locate-outline" size={18} color={colors.primary} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-          <View style={styles.radarMap}>
-            <View style={[styles.radarDot, styles.dotA]} />
-            <View style={[styles.radarDot, styles.dotB]} />
-            <View style={[styles.radarDot, styles.dotC]} />
-            <View style={styles.radarRing} />
-            <Text style={styles.radarCenter}>Vos</Text>
+          <View style={styles.legendRow}>
+            <LegendDot color={colors.primary} label="Eventos" />
+            <LegendDot color={colors.warning} label="Negocios y lugares" />
           </View>
+          {placesError ? <Text style={styles.warningText}>{placesError}</Text> : null}
+          {Platform.OS === 'web' ? (
+            <MapFallback experiences={mappedExperiences} places={places} />
+          ) : (
+            <View
+              style={styles.mapFrame}
+              onTouchStart={() => setScrollEnabled(false)}
+              onTouchEnd={() => setScrollEnabled(true)}
+              onTouchCancel={() => setScrollEnabled(true)}
+            >
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                initialRegion={region}
+                showsUserLocation={Boolean(userCoordinate)}
+                showsMyLocationButton
+                zoomEnabled
+                scrollEnabled
+                rotateEnabled
+                pitchEnabled
+              >
+                {userCoordinate ? (
+                  <Marker coordinate={userCoordinate} title="Vos" pinColor={colors.primary} />
+                ) : null}
+                {mappedExperiences.map((experience) => (
+                  <Marker
+                    key={experience.id}
+                    coordinate={{
+                      latitude: experienceCoordinate(experience)!.latitude,
+                      longitude: experienceCoordinate(experience)!.longitude,
+                    }}
+                    title={experience.title}
+                    description={experience.location?.addressPublic ?? experience.place}
+                    pinColor={colors.primary}
+                    onPress={() => onOpenExperience(experience)}
+                    onCalloutPress={() => onOpenExperience(experience)}
+                  />
+                ))}
+                {places.map((place) => (
+                  <Marker
+                    key={place.placeId}
+                    coordinate={{ latitude: place.latitude, longitude: place.longitude }}
+                    title={place.name}
+                    description={place.address}
+                    pinColor={colors.warning}
+                  />
+                ))}
+              </MapView>
+              {mappedExperiences.length === 0 && places.length === 0 ? (
+                <View style={styles.mapEmptyOverlay}>
+                  <EmptyState
+                    icon="location-outline"
+                    title="Sin puntos en el mapa"
+                    message="Las experiencias con direccion o coordenadas aparecen ubicadas en el radar."
+                    compact
+                  />
+                </View>
+              ) : null}
+            </View>
+          )}
         </View>
       ) : null}
 
@@ -89,15 +249,96 @@ export function ExploreScreen({ experiences, onOpenExperience }: ExploreScreenPr
               <ExperienceCard key={experience.id} experience={experience} onPress={onOpenExperience} />
             ))
           ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={24} color={colors.muted} />
-              <Text style={styles.emptyTitle}>Sin resultados</Text>
-              <Text style={styles.emptyMeta}>Probá con barrio, estilo, evento o plan social.</Text>
-            </View>
+            <EmptyState
+              icon="search-outline"
+              title="Sin resultados"
+              message="Proba con otro barrio, estilo, evento o plan social."
+            />
           )}
+          {places.length > 0 ? (
+            <View style={styles.placesPanel}>
+              <Text style={styles.placesTitle}>Lugares encontrados</Text>
+              {places.slice(0, 5).map((place) => (
+                <View key={place.placeId} style={styles.placeRow}>
+                  <Ionicons name="business-outline" size={18} color={colors.warning} />
+                  <View style={styles.placeCopy}>
+                    <Text style={styles.placeTitle}>{place.name}</Text>
+                    <Text style={styles.placeMeta}>{place.address}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </>
       ) : null}
     </ScrollView>
+  );
+}
+
+function buildRegion(experiences: Experience[], places: PlaceResult[], userCoordinate: Coordinate | null): Region {
+  const firstExperience = experiences.find(hasExperienceCoordinates);
+  const firstCoordinate = firstExperience ? experienceCoordinate(firstExperience) : null;
+  const firstPlace = places[0] ? { latitude: places[0].latitude, longitude: places[0].longitude } : null;
+  const center = userCoordinate
+    ?? firstCoordinate
+    ?? firstPlace
+    ?? { latitude: -34.5889, longitude: -58.4306 };
+
+  return {
+    ...center,
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  };
+}
+
+function MapFallback({ experiences, places }: { experiences: Experience[]; places: PlaceResult[] }) {
+  const rows = [
+    ...experiences.slice(0, 4).map((experience) => ({
+      id: experience.id,
+      title: experience.title,
+      meta: experience.location?.addressPublic ?? experience.place,
+      icon: 'location-outline' as const,
+      color: colors.primary,
+    })),
+    ...places.slice(0, 4).map((place) => ({
+      id: place.placeId,
+      title: place.name,
+      meta: place.address,
+      icon: 'business-outline' as const,
+      color: colors.warning,
+    })),
+  ];
+
+  return (
+    <View style={styles.mapFallback}>
+      {rows.length > 0 ? (
+        rows.map((row) => (
+          <View key={row.id} style={styles.mapFallbackRow}>
+            <Ionicons name={row.icon} size={18} color={row.color} />
+            <View style={styles.mapFallbackCopy}>
+              <Text style={styles.mapFallbackTitle}>{row.title}</Text>
+              <Text style={styles.mapFallbackMeta}>{row.meta}</Text>
+            </View>
+          </View>
+        ))
+      ) : (
+        <EmptyState
+          icon="map-outline"
+          title="Sin ubicaciones"
+          message="Cuando haya experiencias con coordenadas, se muestran aca."
+          compact
+        />
+      )}
+    </View>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendText}>{label}</Text>
+    </View>
   );
 }
 
@@ -162,61 +403,103 @@ const styles = StyleSheet.create({
   radarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 10,
   },
   radarTitle: {
     color: colors.success,
     fontWeight: '900',
   },
+  radarMeta: {
+    color: colors.muted,
+    marginTop: 3,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  radarHeaderActions: {
+    alignItems: 'flex-end',
+    gap: 7,
+  },
   radarBadge: {
     color: colors.primary,
     fontWeight: '900',
   },
-  radarMap: {
-    height: 128,
+  recenterButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapFrame: {
+    height: 220,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  map: {
+    flex: 1,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    color: colors.muted,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  warningText: {
+    color: colors.warning,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  mapEmptyOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 42,
+  },
+  mapFallback: {
+    minHeight: 180,
     borderRadius: 8,
     backgroundColor: colors.black,
     borderColor: colors.border,
     borderWidth: 1,
-    overflow: 'hidden',
+    padding: 10,
+    gap: 8,
+  },
+  mapFallbackRow: {
+    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
   },
-  radarRing: {
-    position: 'absolute',
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    borderColor: '#35264E',
-    borderWidth: 2,
+  mapFallbackCopy: {
+    flex: 1,
   },
-  radarDot: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-  },
-  dotA: {
-    left: 52,
-    top: 32,
-  },
-  dotB: {
-    right: 58,
-    top: 48,
-    backgroundColor: colors.success,
-  },
-  dotC: {
-    right: 88,
-    bottom: 28,
-    backgroundColor: colors.danger,
-  },
-  radarCenter: {
+  mapFallbackTitle: {
     color: colors.text,
     fontWeight: '900',
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+  },
+  mapFallbackMeta: {
+    color: colors.muted,
+    marginTop: 3,
+    fontWeight: '700',
   },
   titleRow: {
     flexDirection: 'row',
@@ -232,26 +515,38 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '900',
   },
-  emptyState: {
-    minHeight: 130,
-    borderRadius: 8,
+  placesPanel: {
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderWidth: 1,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
   },
-  emptyTitle: {
+  placesTitle: {
     color: colors.text,
-    fontSize: 17,
     fontWeight: '900',
-    marginTop: 8,
   },
-  emptyMeta: {
+  placeRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  placeCopy: {
+    flex: 1,
+  },
+  placeTitle: {
+    color: colors.text,
+    fontWeight: '900',
+  },
+  placeMeta: {
     color: colors.muted,
-    marginTop: 4,
+    marginTop: 3,
     fontWeight: '700',
-    textAlign: 'center',
+    fontSize: 12,
   },
 });

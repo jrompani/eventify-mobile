@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 import { Experience } from '../types/experience';
 
@@ -6,6 +7,8 @@ export type RegistrationResult =
   | 'REGISTERED'
   | 'REQUESTED'
   | 'WAITLISTED'
+  | 'WAITLIST_ACCEPTED'
+  | 'WAITLIST_DECLINED'
   | 'INELIGIBLE'
   | 'INTERESTED'
   | 'REMOVED'
@@ -56,7 +59,7 @@ export type WalletTicketResponse = {
 export async function markInterested(session: AuthSession, experienceId: string) {
   return apiFetch<RegistrationActionResponse>(`/experiences/${experienceId}/interest`, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
@@ -67,7 +70,7 @@ export async function registerForExperience(session: AuthSession, experience: Ex
 
   return apiFetch<RegistrationActionResponse>(path, {
     method: 'POST',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
@@ -80,25 +83,32 @@ export async function cancelExperienceRegistration(session: AuthSession, experie
 
   return apiFetch<RegistrationActionResponse>(path, {
     method: 'DELETE',
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
+  });
+}
+
+export async function acceptWaitlistOffer(session: AuthSession, experienceId: string) {
+  return apiFetch<RegistrationActionResponse>(`/experiences/${experienceId}/waitlist/accept`, {
+    method: 'POST',
+    ...authOptionsFor(session),
+  });
+}
+
+export async function declineWaitlistOffer(session: AuthSession, experienceId: string) {
+  return apiFetch<RegistrationActionResponse>(`/experiences/${experienceId}/waitlist/decline`, {
+    method: 'POST',
+    ...authOptionsFor(session),
   });
 }
 
 export async function getMyTicket(session: AuthSession, experienceId: string) {
   return apiFetch<MyTicketResponse>(`/experiences/${experienceId}/my-ticket`, {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function listMyTickets(session: AuthSession) {
   return apiFetch<WalletTicketResponse[]>('/me/tickets', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
@@ -43,25 +44,18 @@ export type Capabilities = {
 
 export async function getVerifications(session: AuthSession) {
   return apiFetch<Verification[]>('/me/verifications', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function getRestrictions(session: AuthSession) {
   return apiFetch<Restriction[]>('/me/restrictions', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
 }
 
 export async function getCapabilities(session: AuthSession) {
   return apiFetch<Capabilities>('/me/capabilities', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

@@ -4,9 +4,13 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { ChatMessage, Conversation, listMessages, openGroupConversation, sendMessage } from '../api/chat';
 import { createGroup, EventGroup, joinGroup, listGroups } from '../api/groups';
+import { blockUser, createReport } from '../api/trustSafety';
+import { EmptyState } from '../components/EmptyState';
 import { colors } from '../theme/colors';
 import { AuthSession } from '../types/auth';
 import { Experience } from '../types/experience';
+import { isUuid } from '../utils/format';
+import { labelForStatus } from '../utils/statusLabels';
 
 type SocialScreenProps = {
   session: AuthSession;
@@ -196,6 +200,55 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
     }
   }
 
+  async function handleReportGroup(group: EventGroup) {
+    setError(null);
+    setMessage(null);
+
+    if (!isUuid(group.id)) {
+      setMessage('Grupo reportado en modo demo.');
+      return;
+    }
+
+    try {
+      await createReport(session, 'GROUP', group.id, 'SAFETY_RISK', `Reporte desde grupo: ${group.name}`);
+      setMessage('Grupo reportado. Seguridad lo va a revisar.');
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo reportar el grupo');
+    }
+  }
+
+  async function handleReportMessage(chatMessage: ChatMessage) {
+    setError(null);
+    setMessage(null);
+
+    if (!isUuid(chatMessage.id)) {
+      setMessage('Mensaje reportado en modo demo.');
+      return;
+    }
+
+    try {
+      await createReport(session, 'MESSAGE', chatMessage.id, 'HARASSMENT', 'Reporte desde chat grupal.');
+      setMessage('Mensaje reportado.');
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo reportar el mensaje');
+    }
+  }
+
+  async function handleBlockSender(chatMessage: ChatMessage) {
+    if (!isUuid(chatMessage.senderUserId) || chatMessage.senderUserId === session.user.id) {
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    try {
+      await blockUser(session, chatMessage.senderUserId);
+      setMessage(`${chatMessage.senderEmail} bloqueado.`);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo bloquear al usuario');
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       <View style={styles.header}>
@@ -241,28 +294,39 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
       {message ? <Text style={styles.successText}>{message}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {groups.map((group) => {
-        const joined = joinedGroupIds.includes(group.id);
-        return (
-          <Pressable key={group.id} style={styles.socialRow} onPress={() => handleOpenChat(group)}>
-            <Ionicons name="chatbubbles-outline" size={26} color={colors.primary} style={styles.socialIcon} />
-            <View style={styles.socialText}>
-              <Text style={styles.rowTitle}>{group.name}</Text>
-              <Text style={styles.rowMeta}>{group.description || 'Coordinacion abierta para asistentes.'}</Text>
-              <Text style={styles.rowBadge}>{group.status} - {group.visibility}</Text>
-            </View>
-            <Pressable
-              style={[styles.joinButton, joined && styles.joinedButton]}
-              onPress={() => handleJoinGroup(group)}
-              disabled={joined || joiningId === group.id}
-            >
-              <Text style={[styles.joinButtonText, joined && styles.joinedButtonText]}>
-                {joined ? 'Dentro' : joiningId === group.id ? '...' : 'Unirme'}
-              </Text>
+      {groups.length > 0 ? (
+        groups.map((group) => {
+          const joined = joinedGroupIds.includes(group.id);
+          return (
+            <Pressable key={group.id} style={styles.socialRow} onPress={() => handleOpenChat(group)}>
+              <Ionicons name="chatbubbles-outline" size={26} color={colors.primary} style={styles.socialIcon} />
+              <View style={styles.socialText}>
+                <Text style={styles.rowTitle}>{group.name}</Text>
+                <Text style={styles.rowMeta}>{group.description || 'Coordinacion abierta para asistentes.'}</Text>
+                <Text style={styles.rowBadge}>{labelForStatus(group.status)} - {labelForStatus(group.visibility)}</Text>
+              </View>
+              <Pressable
+                style={[styles.joinButton, joined && styles.joinedButton]}
+                onPress={() => handleJoinGroup(group)}
+                disabled={joined || joiningId === group.id}
+              >
+                <Text style={[styles.joinButtonText, joined && styles.joinedButtonText]}>
+                  {joined ? 'Dentro' : joiningId === group.id ? '...' : 'Unirme'}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.reportIconButton} onPress={() => handleReportGroup(group)}>
+                <Ionicons name="flag-outline" size={17} color={colors.danger} />
+              </Pressable>
             </Pressable>
-          </Pressable>
-        );
-      })}
+          );
+        })
+      ) : (
+        <EmptyState
+          icon="people-outline"
+          title="No hay grupos todavia"
+          message="Crea el primer grupo para coordinar previa, llegada o vuelta con otros asistentes."
+        />
+      )}
 
       {activeGroup ? (
         <View style={styles.chatPanel}>
@@ -284,11 +348,32 @@ export function SocialScreen({ session, experiences }: SocialScreenProps) {
                   <View key={chatMessage.id} style={[styles.messageBubble, mine && styles.messageBubbleMine]}>
                     <Text style={styles.messageSender}>{mine ? 'Vos' : chatMessage.senderEmail}</Text>
                     <Text style={styles.messageBody}>{chatMessage.body}</Text>
+                    {!mine ? (
+                      <View style={styles.messageActions}>
+                        <Pressable style={styles.messageActionButton} onPress={() => handleReportMessage(chatMessage)}>
+                          <Ionicons name="flag-outline" size={13} color={colors.danger} />
+                          <Text style={styles.messageActionText}>Reportar</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.messageActionButton, !isUuid(chatMessage.senderUserId) && styles.disabled]}
+                          onPress={() => handleBlockSender(chatMessage)}
+                          disabled={!isUuid(chatMessage.senderUserId)}
+                        >
+                          <Ionicons name="ban-outline" size={13} color={colors.danger} />
+                          <Text style={styles.messageActionText}>Bloquear</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
                 );
               })
             ) : (
-              <Text style={styles.metaText}>Todavia no hay mensajes.</Text>
+              <EmptyState
+                icon="chatbubble-outline"
+                title="Todavia no hay mensajes"
+                message="Escribi el primer mensaje para abrir la conversacion del grupo."
+                compact
+              />
             )}
           </View>
 
@@ -321,10 +406,6 @@ function SummaryPill({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; la
       <Text style={styles.summaryText}>{label}</Text>
     </View>
   );
-}
-
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function buildDemoMessages(group: EventGroup, email: string): ChatMessage[] {
@@ -451,6 +532,16 @@ const styles = StyleSheet.create({
   socialText: {
     flex: 1,
   },
+  reportIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowTitle: {
     color: colors.text,
     fontSize: 16,
@@ -558,6 +649,29 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
     lineHeight: 19,
+  },
+  messageActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  messageActionButton: {
+    minHeight: 28,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 5,
+  },
+  messageActionText: {
+    color: colors.danger,
+    fontSize: 11,
+    fontWeight: '900',
   },
   messageComposer: {
     minHeight: 46,

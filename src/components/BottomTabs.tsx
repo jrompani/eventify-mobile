@@ -9,6 +9,7 @@ export const tabs: Array<{ key: TabKey; label: string; icon: IconName }> = [
   { key: 'explore', label: 'Explorar', icon: 'search-outline' },
   { key: 'create', label: 'Crear', icon: 'add-circle-outline' },
   { key: 'wallet', label: 'Wallet', icon: 'ticket-outline' },
+  { key: 'notifications', label: 'Avisos', icon: 'notifications-outline' },
   { key: 'social', label: 'Social', icon: 'chatbubbles-outline' },
   { key: 'organizer', label: 'Org', icon: 'briefcase-outline' },
   { key: 'profile', label: 'Perfil', icon: 'person-circle-outline' },
@@ -17,13 +18,15 @@ export const tabs: Array<{ key: TabKey; label: string; icon: IconName }> = [
 type BottomTabsProps = {
   activeTab: TabKey;
   onChange: (tab: TabKey) => void;
+  badges?: Partial<Record<TabKey, number>>;
 };
 
-export function BottomTabs({ activeTab, onChange }: BottomTabsProps) {
+export function BottomTabs({ activeTab, onChange, badges = {} }: BottomTabsProps) {
   return (
     <View style={styles.bottomNav}>
       {tabs.map((tab) => {
         const selected = activeTab === tab.key;
+        const badgeCount = badges[tab.key] ?? 0;
         return (
           <Pressable
             key={tab.key}
@@ -32,7 +35,14 @@ export function BottomTabs({ activeTab, onChange }: BottomTabsProps) {
             accessibilityRole="button"
             accessibilityLabel={tab.label}
           >
-            <Ionicons name={tab.icon} size={22} color={selected ? colors.primary : colors.muted} />
+            <View style={styles.iconSlot}>
+              <Ionicons name={tab.icon} size={22} color={selected ? colors.primary : colors.muted} />
+              {badgeCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{badgeCount > 9 ? '9+' : badgeCount}</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={[styles.navLabel, selected && styles.navLabelActive]}>{tab.label}</Text>
           </Pressable>
         );
@@ -69,6 +79,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     borderColor: colors.borderLight,
     borderWidth: 1,
+  },
+  iconSlot: {
+    width: 30,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -4,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: colors.inverse,
+    fontSize: 10,
+    fontWeight: '900',
   },
   navLabel: {
     color: colors.muted,

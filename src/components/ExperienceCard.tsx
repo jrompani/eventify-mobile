@@ -35,7 +35,7 @@ export function ExperienceCard({ experience, onPress }: ExperienceCardProps) {
         <View style={styles.cardFooter}>
           <View>
             <Text style={styles.price}>{experience.price}</Text>
-            <Text style={styles.attendees}>{experience.attendees} compatibles cerca</Text>
+            <Text style={styles.attendees}>{experience.attendees} cupos o asistentes</Text>
           </View>
           <Pressable style={styles.ctaButton} onPress={() => onPress?.(experience)}>
             <Text style={styles.ctaText}>{experience.status}</Text>

@@ -3,10 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { listMyTickets, WalletTicketResponse } from '../api/registrations';
+import { EmptyState } from '../components/EmptyState';
+import { StatusBadge } from '../components/StatusBadge';
 import { experiences as fallbackExperiences } from '../data/mockExperiences';
 import { colors } from '../theme/colors';
 import { AuthSession } from '../types/auth';
 import { Experience } from '../types/experience';
+import { isUuid } from '../utils/format';
+import { labelForStatus } from '../utils/statusLabels';
 
 type WalletScreenProps = {
   session: AuthSession;
@@ -21,10 +25,11 @@ type WalletTicket = {
 
 export function WalletScreen({ session, experiences, onOpenExperience }: WalletScreenProps) {
   const [tickets, setTickets] = useState<WalletTicket[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const demoTickets = useMemo(() => buildDemoTickets(experiences), [experiences]);
-  const visibleTickets = tickets.length > 0 ? tickets : demoTickets;
+  const visibleTickets = tickets.length > 0 ? tickets : !loaded && error ? demoTickets : [];
 
   useEffect(() => {
     void loadTickets();
@@ -40,8 +45,10 @@ export function WalletScreen({ session, experiences, onOpenExperience }: WalletS
         ticket,
         experience: toExperience(ticket, experiences, index),
       })));
+      setLoaded(true);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo cargar la wallet');
+      setLoaded(false);
     } finally {
       setLoading(false);
     }
@@ -66,7 +73,12 @@ export function WalletScreen({ session, experiences, onOpenExperience }: WalletS
       </View>
 
       {loading ? <Text style={styles.metaText}>Sincronizando tickets...</Text> : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+          {demoTickets.length > 0 ? <Text style={styles.metaText}>Mostrando wallet demo hasta reconectar.</Text> : null}
+        </View>
+      ) : null}
 
       {visibleTickets.length > 0 ? (
         visibleTickets.map(({ experience, ticket }) => (
@@ -79,9 +91,10 @@ export function WalletScreen({ session, experiences, onOpenExperience }: WalletS
                 <Text style={styles.ticketTitle}>{experience.title}</Text>
                 <Text style={styles.ticketMeta}>{experience.time} - {experience.place}</Text>
               </View>
-              <Text style={[styles.statusPill, ticket.usedAt && styles.usedPill]}>
-                {ticket.usedAt || ticket.entitlementStatus === 'USED' ? 'USADO' : ticket.entitlementStatus ?? 'ACTIVO'}
-              </Text>
+              <StatusBadge
+                label={ticket.usedAt || ticket.entitlementStatus === 'USED' ? 'Usado' : labelForStatus(ticket.entitlementStatus ?? 'ACTIVE')}
+                tone={ticket.usedAt || ticket.entitlementStatus === 'USED' ? 'neutral' : 'success'}
+              />
             </View>
 
             <View style={styles.codeBox}>
@@ -96,11 +109,11 @@ export function WalletScreen({ session, experiences, onOpenExperience }: WalletS
           </Pressable>
         ))
       ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="ticket-outline" size={28} color={colors.muted} />
-          <Text style={styles.emptyTitle}>Todavia no tenes tickets</Text>
-          <Text style={styles.emptyMeta}>Cuando te registres a una experiencia, tu SafePass aparece aca.</Text>
-        </View>
+        <EmptyState
+          icon="ticket-outline"
+          title="Todavia no tenes tickets"
+          message="Cuando reserves o compres una entrada, tu SafePass aparece aca listo para mostrar en puerta."
+        />
       )}
     </ScrollView>
   );
@@ -162,7 +175,7 @@ function toExperience(ticket: WalletTicketResponse, experiences: Experience[], i
     status: 'Asistiras',
     attendees: ticket.capacity ?? fallback.attendees,
     distance: fallback.distance,
-    trustLabel: ticket.entitlementStatus === 'ACTIVE' ? 'SafePass activo' : ticket.entitlementStatus,
+    trustLabel: ticket.entitlementStatus === 'ACTIVE' ? 'SafePass activo' : labelForStatus(ticket.entitlementStatus),
     imageUrl: fallback.imageUrl,
     tags: [kind, ticket.experienceStatus, ticket.registrationStatus],
   };
@@ -191,10 +204,6 @@ function formatIssuedAt(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)}`;
-}
-
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 const styles = StyleSheet.create({
@@ -291,23 +300,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
-  statusPill: {
-    color: colors.success,
-    backgroundColor: colors.successSoft,
-    borderColor: '#16533F',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    overflow: 'hidden',
-    fontWeight: '900',
-    fontSize: 11,
-  },
-  usedPill: {
-    color: colors.muted,
-    backgroundColor: colors.black,
-    borderColor: colors.border,
-  },
   codeBox: {
     minHeight: 82,
     borderRadius: 8,
@@ -340,29 +332,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontWeight: '800',
   },
-  emptyState: {
-    minHeight: 180,
-    borderRadius: 8,
-    borderColor: colors.border,
-    borderWidth: 1,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-  },
-  emptyTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '900',
-    marginTop: 8,
-  },
-  emptyMeta: {
-    color: colors.muted,
-    marginTop: 4,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
   metaText: {
     color: colors.muted,
     fontWeight: '800',
@@ -371,5 +340,13 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: '800',
     lineHeight: 20,
+  },
+  errorBox: {
+    borderRadius: 8,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    padding: 12,
+    gap: 6,
   },
 });

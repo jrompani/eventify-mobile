@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type ReputationSummary = {
@@ -11,13 +12,6 @@ export type ReputationSummary = {
 
 export async function getReputation(session: AuthSession) {
   return apiFetch<ReputationSummary>('/me/reputation', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

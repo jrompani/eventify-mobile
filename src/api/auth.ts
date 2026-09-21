@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
-import { AuthResponse, User } from '../types/auth';
+import { authOptionsFor } from './sessionAuth';
+import { AuthResponse, AuthSession, User } from '../types/auth';
 
 export type RegisterInput = {
   email: string;
@@ -13,11 +14,19 @@ export type LoginInput = {
   password: string;
 };
 
+export type SocialLoginInput = {
+  provider: 'GOOGLE';
+  idToken: string;
+};
+
 export type UpdateProfileInput = {
   displayName?: string;
   username?: string;
   bio?: string;
   publicZone?: string;
+  avatarUrl?: string;
+  birthYear?: number;
+  interests?: string[];
 };
 
 export function register(input: RegisterInput) {
@@ -34,10 +43,24 @@ export function login(input: LoginInput) {
   });
 }
 
-export function updateProfile(credentials: LoginInput, input: UpdateProfileInput) {
+export function socialLogin(input: SocialLoginInput) {
+  return apiFetch<AuthResponse>('/auth/social', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function logout(session: AuthSession) {
+  return apiFetch<void>('/auth/logout', {
+    method: 'POST',
+    ...authOptionsFor(session),
+  });
+}
+
+export function updateProfile(session: AuthSession, input: UpdateProfileInput) {
   return apiFetch<User>('/me/profile', {
     method: 'PATCH',
-    basicAuth: credentials,
+    ...authOptionsFor(session),
     body: JSON.stringify(input),
   });
 }

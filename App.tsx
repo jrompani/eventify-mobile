@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthNavigator } from './src/navigation/AuthNavigator';
 import { MainNavigator } from './src/navigation/MainNavigator';
+import { logout } from './src/api/auth';
 import { LoadingScreen } from './src/screens/LoadingScreen';
 import { clearSession, loadSession, saveSession } from './src/storage/sessionStorage';
 import { colors } from './src/theme/colors';
@@ -40,6 +41,13 @@ export default function App() {
   }
 
   async function handleLogout() {
+    if (session?.accessToken) {
+      try {
+        await logout(session);
+      } catch {
+        // Local logout should still work if the session is already expired or the network is down.
+      }
+    }
     await clearSession();
     setSession(null);
   }

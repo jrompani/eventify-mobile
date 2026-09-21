@@ -1,20 +1,31 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { experiences as fallbackExperiences } from '../data/mockExperiences';
 import { AuthSession } from '../types/auth';
-import { Experience } from '../types/experience';
+import { Experience, ExperienceLocation } from '../types/experience';
 
 type ApiExperience = {
   id: string;
   type: 'PROPOSAL' | 'PLAN' | 'EVENT';
+  ownerUserId?: string;
   title: string;
   description: string | null;
   status: string;
   startsAt: string;
   capacity: number | null;
+  publicLocation: ApiLocation | null;
   accessPolicy?: {
     entryMode: string;
     verifiedOnly: boolean;
   };
+};
+
+type ApiLocation = {
+  id: string;
+  label: string | null;
+  addressPublic: string | null;
+  latPublic: number | null;
+  lngPublic: number | null;
 };
 
 type ApiExperiencePage = {
@@ -29,6 +40,12 @@ export type CreateExperienceInput = {
   capacity?: number;
   entryMode: 'OPEN' | 'REQUEST';
   verifiedOnly: boolean;
+  publicLocation?: {
+    label?: string;
+    addressPublic?: string;
+    latPublic?: number;
+    lngPublic?: number;
+  };
 };
 
 const imagePool = fallbackExperiences.map((experience) => experience.imageUrl);
@@ -41,7 +58,7 @@ export async function listExperiences(): Promise<Experience[]> {
 export async function createExperience(session: AuthSession, input: CreateExperienceInput): Promise<Experience> {
   const created = await apiFetch<ApiExperience>('/experiences', {
     method: 'POST',
-    basicAuth: { email: session.email, password: session.password },
+    ...authOptionsFor(session),
     body: JSON.stringify({
       type: input.type,
       title: input.title,
@@ -52,12 +69,13 @@ export async function createExperience(session: AuthSession, input: CreateExperi
       capacity: input.capacity,
       entryMode: input.entryMode,
       verifiedOnly: input.verifiedOnly,
+      publicLocation: input.publicLocation,
     }),
   });
 
   const published = await apiFetch<ApiExperience>(`/experiences/${created.id}`, {
     method: 'PATCH',
-    basicAuth: { email: session.email, password: session.password },
+    ...authOptionsFor(session),
     body: JSON.stringify({
       status: 'PUBLISHED',
     }),
@@ -74,10 +92,11 @@ function toExperience(apiExperience: ApiExperience, index: number): Experience {
 
   return {
     id: apiExperience.id,
+    ownerUserId: apiExperience.ownerUserId,
     title: apiExperience.title,
     kind,
     time: formatDate(date),
-    place: fallback.place,
+    place: apiExperience.publicLocation?.label || apiExperience.publicLocation?.addressPublic || fallback.place,
     price,
     status: ctaFor(apiExperience),
     attendees: apiExperience.capacity ?? fallback.attendees,
@@ -85,6 +104,21 @@ function toExperience(apiExperience: ApiExperience, index: number): Experience {
     trustLabel: apiExperience.accessPolicy?.verifiedOnly ? 'Verificado' : fallback.trustLabel,
     imageUrl: imagePool[index % imagePool.length],
     tags: [kind, apiExperience.status, apiExperience.accessPolicy?.entryMode ?? 'OPEN'],
+    location: toLocation(apiExperience.publicLocation, fallback.location),
+  };
+}
+
+function toLocation(apiLocation: ApiLocation | null, fallback?: ExperienceLocation): ExperienceLocation | undefined {
+  if (!apiLocation) {
+    return fallback;
+  }
+
+  return {
+    id: apiLocation.id,
+    label: apiLocation.label || apiLocation.addressPublic || fallback?.label || 'Ubicacion',
+    addressPublic: apiLocation.addressPublic || apiLocation.label || fallback?.addressPublic || 'Ubicacion publica',
+    latPublic: apiLocation.latPublic,
+    lngPublic: apiLocation.lngPublic,
   };
 }
 

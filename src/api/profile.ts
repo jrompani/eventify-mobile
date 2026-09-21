@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
 import { Capabilities } from './identityTrust';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession, User } from '../types/auth';
 
 export type ProfileStats = {
@@ -18,13 +19,6 @@ export type ProfileOverview = {
 
 export async function getProfileOverview(session: AuthSession) {
   return apiFetch<ProfileOverview>('/me/profile-overview', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

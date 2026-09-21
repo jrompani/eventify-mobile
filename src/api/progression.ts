@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { authOptionsFor } from './sessionAuth';
 import { AuthSession } from '../types/auth';
 
 export type XpLedgerEntry = {
@@ -21,13 +22,6 @@ export type XpSummary = {
 
 export async function getProgression(session: AuthSession) {
   return apiFetch<XpSummary>('/me/progression', {
-    basicAuth: basicAuthFor(session),
+    ...authOptionsFor(session),
   });
-}
-
-function basicAuthFor(session: AuthSession) {
-  return {
-    email: session.email,
-    password: session.password,
-  };
 }

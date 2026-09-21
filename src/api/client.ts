@@ -5,6 +5,8 @@ type ApiOptions = RequestInit & {
     email: string;
     password: string;
   };
+  bearerToken?: string;
+  timeoutMs?: number;
 };
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -15,18 +17,34 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     headers.set('Content-Type', 'application/json');
   }
 
-  if (options.basicAuth) {
+  if (options.bearerToken) {
+    headers.set('Authorization', `Bearer ${options.bearerToken}`);
+  } else if (options.basicAuth) {
     const token = encodeBase64(`${options.basicAuth.email}:${options.basicAuth.password}`);
     headers.set('Authorization', `Basic ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 15000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (exception) {
+    if (exception instanceof Error && exception.name === 'AbortError') {
+      throw new Error('La conexion tardo demasiado. Revisa tu red e intenta de nuevo.');
+    }
+    throw new Error('No se pudo conectar con el servidor.');
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
-    const message = await response.text();
+    const message = await readErrorMessage(response);
     throw new Error(message || `Request failed with status ${response.status}`);
   }
 
@@ -35,6 +53,25 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   }
 
   return response.json() as Promise<T>;
+}
+
+async function readErrorMessage(response: Response) {
+  const contentType = response.headers.get('Content-Type') ?? '';
+  const raw = await response.text();
+  if (!raw) {
+    return null;
+  }
+
+  if (!contentType.includes('application/json')) {
+    return raw;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { message?: string; error?: string; detail?: string };
+    return parsed.message ?? parsed.detail ?? parsed.error ?? raw;
+  } catch {
+    return raw;
+  }
 }
 
 function encodeBase64(value: string) {
