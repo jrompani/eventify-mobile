@@ -26,6 +26,7 @@ export async function openDevAccount(kind: DevAccountKind): Promise<AuthSession>
   const account = devAccounts[kind];
   let user;
   let accessToken: string;
+  let accessTokenExpiresAt: string;
 
   try {
     const response = await register({
@@ -36,6 +37,7 @@ export async function openDevAccount(kind: DevAccountKind): Promise<AuthSession>
     });
     user = response.user;
     accessToken = response.accessToken;
+    accessTokenExpiresAt = response.accessTokenExpiresAt;
   } catch {
     const response = await login({
       email: account.email,
@@ -43,12 +45,13 @@ export async function openDevAccount(kind: DevAccountKind): Promise<AuthSession>
     });
     user = response.user;
     accessToken = response.accessToken;
+    accessTokenExpiresAt = response.accessTokenExpiresAt;
   }
 
   const session: AuthSession = {
-    email: account.email,
-    password: DEV_PASSWORD,
+    email: user.email,
     accessToken,
+    accessTokenExpiresAt,
     user,
   };
 
@@ -64,9 +67,9 @@ export async function openDevAccount(kind: DevAccountKind): Promise<AuthSession>
   );
 
   return {
-    email: account.email,
-    password: DEV_PASSWORD,
+    ...session,
     accessToken,
+    accessTokenExpiresAt,
     user: updatedUser,
   };
 }

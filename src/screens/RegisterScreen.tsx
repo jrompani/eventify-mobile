@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
-import { register, socialLogin } from '../api/auth';
+import { register, sessionFromAuthResponse, socialLogin } from '../api/auth';
 import { getGoogleIdToken } from '../auth/googleAuth';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
@@ -44,7 +44,7 @@ export function RegisterScreen({ onBack, onAuthenticated }: RegisterScreenProps)
         displayName: displayName.trim(),
         username: username.trim() || undefined,
       });
-      onAuthenticated({ email: email.trim(), password, accessToken: response.accessToken, user: response.user });
+      onAuthenticated(sessionFromAuthResponse(response));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo crear la cuenta');
     } finally {
@@ -58,7 +58,7 @@ export function RegisterScreen({ onBack, onAuthenticated }: RegisterScreenProps)
     try {
       const idToken = await getGoogleIdToken();
       const response = await socialLogin({ provider: 'GOOGLE', idToken });
-      onAuthenticated({ email: response.user.email, accessToken: response.accessToken, user: response.user });
+      onAuthenticated(sessionFromAuthResponse(response));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo continuar con Google');
     } finally {

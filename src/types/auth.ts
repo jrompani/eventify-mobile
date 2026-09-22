@@ -21,11 +21,13 @@ export type User = {
 export type AuthResponse = {
   user: User;
   accessToken: string;
+  accessTokenExpiresAt: string;
 };
 
 export type AuthSession = {
   email: string;
   password?: string;
   accessToken?: string;
+  accessTokenExpiresAt?: string;
   user: User;
 };

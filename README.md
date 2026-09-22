@@ -9,6 +9,18 @@ npm install
 npm start
 ```
 
+## Release Android
+
+El flujo de release esta documentado en `ANDROID_RELEASE.md`.
+
+Comandos utiles:
+
+```powershell
+npm run android:signing-report
+npm run android:release:apk
+npm run android:release:aab
+```
+
 Para apuntar al backend local:
 
 ```powershell

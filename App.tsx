@@ -5,7 +5,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthNavigator } from './src/navigation/AuthNavigator';
 import { MainNavigator } from './src/navigation/MainNavigator';
-import { logout } from './src/api/auth';
+import { logout, refreshSession, sessionFromAuthResponse } from './src/api/auth';
+import { shouldRefreshSession } from './src/api/sessionAuth';
 import { LoadingScreen } from './src/screens/LoadingScreen';
 import { clearSession, loadSession, saveSession } from './src/storage/sessionStorage';
 import { colors } from './src/theme/colors';
@@ -18,7 +19,17 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     async function bootstrap() {
-      const storedSession = await loadSession();
+      let storedSession = await loadSession();
+      if (storedSession && shouldRefreshSession(storedSession)) {
+        try {
+          const response = await refreshSession(storedSession);
+          storedSession = sessionFromAuthResponse(response);
+          await saveSession(storedSession);
+        } catch {
+          await clearSession();
+          storedSession = null;
+        }
+      }
       if (mounted) {
         setSession(storedSession);
         setBooting(false);

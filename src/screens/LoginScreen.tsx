@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
-import { login, socialLogin } from '../api/auth';
+import { login, sessionFromAuthResponse, socialLogin } from '../api/auth';
 import { getGoogleIdToken } from '../auth/googleAuth';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
@@ -34,7 +34,7 @@ export function LoginScreen({ onBack, onAuthenticated }: LoginScreenProps) {
     setError(null);
     try {
       const response = await login({ email: email.trim(), password });
-      onAuthenticated({ email: email.trim(), password, accessToken: response.accessToken, user: response.user });
+      onAuthenticated(sessionFromAuthResponse(response));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo iniciar sesion');
     } finally {
@@ -48,7 +48,7 @@ export function LoginScreen({ onBack, onAuthenticated }: LoginScreenProps) {
     try {
       const idToken = await getGoogleIdToken();
       const response = await socialLogin({ provider: 'GOOGLE', idToken });
-      onAuthenticated({ email: response.user.email, accessToken: response.accessToken, user: response.user });
+      onAuthenticated(sessionFromAuthResponse(response));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo iniciar sesion con Google');
     } finally {

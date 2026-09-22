@@ -50,11 +50,34 @@ export function socialLogin(input: SocialLoginInput) {
   });
 }
 
+export function refreshSession(session: AuthSession) {
+  return apiFetch<AuthResponse>('/auth/refresh', {
+    method: 'POST',
+    ...authOptionsFor(session),
+  });
+}
+
 export function logout(session: AuthSession) {
   return apiFetch<void>('/auth/logout', {
     method: 'POST',
     ...authOptionsFor(session),
   });
+}
+
+export function logoutAll(session: AuthSession) {
+  return apiFetch<void>('/auth/logout-all', {
+    method: 'POST',
+    ...authOptionsFor(session),
+  });
+}
+
+export function sessionFromAuthResponse(response: AuthResponse): AuthSession {
+  return {
+    email: response.user.email,
+    accessToken: response.accessToken,
+    accessTokenExpiresAt: response.accessTokenExpiresAt,
+    user: response.user,
+  };
 }
 
 export function updateProfile(session: AuthSession, input: UpdateProfileInput) {
