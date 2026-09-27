@@ -78,6 +78,19 @@ export type OrganizerTicketProduct = {
   status: string;
 };
 
+export type OrganizerAnnouncement = {
+  id: string;
+  experienceId: string;
+  authorUserId: string;
+  authorEmail: string;
+  audience: 'REGISTERED';
+  title: string;
+  body: string;
+  automatic: boolean;
+  notifiedCount: number;
+  createdAt: string;
+};
+
 export type OrganizerAuditEvent = {
   id: string;
   actorUserId: string;
@@ -96,6 +109,7 @@ export type OrganizerDashboard = {
   waitlist: OrganizerWaitlistEntry[];
   staff: OrganizerStaff[];
   ticketProducts: OrganizerTicketProduct[];
+  announcements: OrganizerAnnouncement[];
   recentAuditEvents: OrganizerAuditEvent[];
 };
 
@@ -205,5 +219,29 @@ export async function removeOrganizerStaff(session: AuthSession, experienceId: s
   return apiFetch<OrganizerStaff>(`/organizer/events/${experienceId}/staff/${userId}`, {
     method: 'DELETE',
     ...authOptionsFor(session),
+  });
+}
+
+export async function updateOrganizerExperience(
+  session: AuthSession,
+  experienceId: string,
+  input: { title?: string; startsAt?: string; capacity?: number; status?: string }
+) {
+  return apiFetch(`/experiences/${experienceId}`, {
+    method: 'PATCH',
+    ...authOptionsFor(session),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function sendOrganizerAnnouncement(
+  session: AuthSession,
+  experienceId: string,
+  input: { title: string; body: string; audience: 'REGISTERED' }
+) {
+  return apiFetch<OrganizerAnnouncement>(`/organizer/events/${experienceId}/announcements`, {
+    method: 'POST',
+    ...authOptionsFor(session),
+    body: JSON.stringify(input),
   });
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { login, sessionFromAuthResponse, socialLogin } from '../api/auth';
-import { getGoogleIdToken } from '../auth/googleAuth';
+import { getGoogleAuthTokens, signOutGoogle } from '../auth/googleAuth';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { SocialAuthButtons, SocialProvider } from '../components/SocialAuthButtons';
@@ -46,10 +46,13 @@ export function LoginScreen({ onBack, onAuthenticated }: LoginScreenProps) {
     setSocialSubmitting(true);
     setError(null);
     try {
-      const idToken = await getGoogleIdToken();
-      const response = await socialLogin({ provider: 'GOOGLE', idToken });
+      const tokens = await getGoogleAuthTokens();
+      const response = await socialLogin({ provider: 'GOOGLE', ...tokens, createIfMissing: false });
       onAuthenticated(sessionFromAuthResponse(response));
     } catch (exception) {
+      if (exception instanceof Error && exception.message.includes('no existe')) {
+        await signOutGoogle();
+      }
       setError(exception instanceof Error ? exception.message : 'No se pudo iniciar sesion con Google');
     } finally {
       setSocialSubmitting(false);

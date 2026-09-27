@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { updateProfile } from '../api/auth';
+import { PlaceResult, searchPlaces } from '../api/places';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { colors } from '../theme/colors';
 import { AuthSession } from '../types/auth';
+
+type ProfileGender = 'FEMALE' | 'MALE' | 'OTHER' | 'PREFER_NOT_TO_SAY';
 
 type ProfileSetupScreenProps = {
   session: AuthSession;
@@ -18,10 +21,56 @@ export function ProfileSetupScreen({ session, onDone }: ProfileSetupScreenProps)
   const [publicZone, setPublicZone] = useState(session.user.profile.publicZone ?? '');
   const [avatarUrl, setAvatarUrl] = useState(session.user.profile.avatarUrl ?? '');
   const [birthYear, setBirthYear] = useState(session.user.profile.birthYear ? `${session.user.profile.birthYear}` : '');
+  const [gender, setGender] = useState<ProfileGender | null>(session.user.profile.gender);
   const [interests, setInterests] = useState<string[]>(session.user.profile.interests ?? []);
   const [bio, setBio] = useState(session.user.profile.bio ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [zoneSuggestions, setZoneSuggestions] = useState<PlaceResult[]>([]);
+  const [zoneSearching, setZoneSearching] = useState(false);
+  const [interestPickerVisible, setInterestPickerVisible] = useState(false);
+
+  useEffect(() => {
+    const query = publicZone.trim();
+    if (query.length < 3) {
+      setZoneSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setZoneSearching(true);
+      try {
+        const results = await searchPlaces(session, query, null);
+        if (!cancelled) {
+          setZoneSuggestions(results.slice(0, 5));
+        }
+      } catch {
+        if (!cancelled) {
+          setZoneSuggestions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setZoneSearching(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [publicZone, session]);
+
+  function applyZoneSuggestion(place: PlaceResult) {
+    setPublicZone(place.address || place.name);
+    setZoneSuggestions([]);
+  }
+
+  function addInterest(interest: string) {
+    setInterests((current) => current.includes(interest) ? current : [...current, interest]);
+    setInterestPickerVisible(false);
+  }
 
   async function submit() {
     setSubmitting(true);
@@ -35,6 +84,7 @@ export function ProfileSetupScreen({ session, onDone }: ProfileSetupScreenProps)
           publicZone: publicZone.trim(),
           avatarUrl: avatarUrl.trim() || undefined,
           birthYear: parseBirthYear(birthYear),
+          gender: gender ?? undefined,
           interests,
           bio: bio.trim(),
         }
@@ -56,39 +106,80 @@ export function ProfileSetupScreen({ session, onDone }: ProfileSetupScreenProps)
       <AuthField label="Username" value={username} onChangeText={setUsername} />
       <AuthField label="Foto de perfil URL" value={avatarUrl} onChangeText={setAvatarUrl} placeholder="https://..." />
       <AuthField label="Anio de nacimiento" value={birthYear} onChangeText={setBirthYear} placeholder="1998" keyboardType="number-pad" />
+      <View style={styles.genderBlock}>
+        <Text style={styles.interestsTitle}>Genero</Text>
+        <View style={styles.interestsGrid}>
+          {genderOptions.map((option) => (
+            <Pressable
+              key={option.value}
+              style={[styles.interestChip, gender === option.value && styles.interestChipActive]}
+              onPress={() => setGender(option.value)}
+            >
+              <Text style={[styles.interestText, gender === option.value && styles.interestTextActive]}>{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       <AuthField label="Zona publica" value={publicZone} onChangeText={setPublicZone} placeholder="Tu barrio o ciudad" />
+      {zoneSearching ? <Text style={styles.metaText}>Buscando zonas...</Text> : null}
+      {zoneSuggestions.length > 0 ? (
+        <View style={styles.suggestionList}>
+          {zoneSuggestions.map((place) => (
+            <Pressable key={place.placeId} style={styles.suggestionRow} onPress={() => applyZoneSuggestion(place)}>
+              <Text style={styles.suggestionTitle}>{place.name}</Text>
+              <Text style={styles.suggestionMeta}>{place.address}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <View style={styles.interestsBlock}>
         <Text style={styles.interestsTitle}>Intereses</Text>
         <View style={styles.interestsGrid}>
-          {interestOptions.map((interest) => {
-            const selected = interests.includes(interest);
-            return (
+          {interests.map((interest) => (
               <Pressable
                 key={interest}
-                style={[styles.interestChip, selected && styles.interestChipActive]}
-                onPress={() => setInterests((current) => toggleInterest(current, interest))}
+                style={[styles.interestChip, styles.interestChipActive]}
+                onPress={() => setInterests((current) => current.filter((item) => item !== interest))}
               >
-                <Text style={[styles.interestText, selected && styles.interestTextActive]}>{interest}</Text>
+                <Text style={[styles.interestText, styles.interestTextActive]}>{interest} x</Text>
               </Pressable>
-            );
-          })}
+          ))}
+          <Pressable style={styles.addInterestButton} onPress={() => setInterestPickerVisible(true)}>
+            <Text style={styles.addInterestText}>+</Text>
+          </Pressable>
         </View>
       </View>
       <AuthField label="Bio" value={bio} onChangeText={setBio} multiline placeholder="Musica, rooftops, planes tranquilos..." />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <AuthButton label={submitting ? 'Guardando...' : 'Continuar al home'} onPress={submit} disabled={submitting || !displayName} />
       <AuthButton label="Completar despues" onPress={() => onDone(session)} variant="secondary" />
+      <Modal visible={interestPickerVisible} animationType="slide" transparent onRequestClose={() => setInterestPickerVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Agregar interes</Text>
+            {interestOptions.filter((interest) => !interests.includes(interest)).map((interest) => (
+              <Pressable key={interest} style={styles.selectOption} onPress={() => addInterest(interest)}>
+                <Text style={styles.selectOptionText}>{interest}</Text>
+                <Text style={styles.selectOptionIcon}>+</Text>
+              </Pressable>
+            ))}
+            <Pressable style={styles.closeOption} onPress={() => setInterestPickerVisible(false)}>
+              <Text style={styles.closeOptionText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
 const interestOptions = ['Electronica', 'Rooftops', 'After office', 'Arte', 'Food', 'Networking', 'Outdoor', 'Tranquilo', 'Fiesta'];
-
-function toggleInterest(current: string[], interest: string) {
-  return current.includes(interest)
-    ? current.filter((item) => item !== interest)
-    : [...current, interest];
-}
+const genderOptions: Array<{ value: ProfileGender; label: string }> = [
+  { value: 'FEMALE', label: 'Mujer' },
+  { value: 'MALE', label: 'Hombre' },
+  { value: 'OTHER', label: 'Otro' },
+  { value: 'PREFER_NOT_TO_SAY', label: 'Prefiero no decir' },
+];
 
 function parseBirthYear(value: string) {
   const year = Number.parseInt(value, 10);
@@ -122,7 +213,36 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: '800',
   },
+  metaText: {
+    color: colors.muted,
+    fontWeight: '800',
+  },
+  suggestionList: {
+    gap: 8,
+  },
+  suggestionRow: {
+    minHeight: 52,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    padding: 10,
+    justifyContent: 'center',
+  },
+  suggestionTitle: {
+    color: colors.text,
+    fontWeight: '900',
+  },
+  suggestionMeta: {
+    color: colors.muted,
+    marginTop: 3,
+    fontWeight: '700',
+    fontSize: 12,
+  },
   interestsBlock: {
+    gap: 8,
+  },
+  genderBlock: {
     gap: 8,
   },
   interestsTitle: {
@@ -150,6 +270,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
   },
+  addInterestButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addInterestText: {
+    color: colors.black,
+    fontSize: 20,
+    fontWeight: '900',
+  },
   interestText: {
     color: colors.muted,
     fontWeight: '900',
@@ -157,5 +290,56 @@ const styles = StyleSheet.create({
   },
   interestTextActive: {
     color: colors.primary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.68)',
+  },
+  modalSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: 19,
+    fontWeight: '900',
+  },
+  selectOption: {
+    minHeight: 46,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectOptionText: {
+    color: colors.text,
+    fontWeight: '900',
+  },
+  selectOptionIcon: {
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  closeOption: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeOptionText: {
+    color: colors.muted,
+    fontWeight: '900',
   },
 });

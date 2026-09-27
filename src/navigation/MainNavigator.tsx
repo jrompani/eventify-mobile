@@ -6,13 +6,13 @@ import { listExperiences } from '../api/experiences';
 import { listMyNotifications } from '../api/notifications';
 import { AppHeader } from '../components/AppHeader';
 import { BottomTabs } from '../components/BottomTabs';
-import { experiences as fallbackExperiences } from '../data/mockExperiences';
 import { Coordinate, enrichExperiencesWithDistance } from '../location/distance';
 import { CreateExperienceScreen } from '../screens/CreateExperienceScreen';
 import { ExperienceDetailScreen } from '../screens/ExperienceDetailScreen';
 import { ExploreScreen } from '../screens/ExploreScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { OrganizerProfileScreen } from '../screens/OrganizerProfileScreen';
 import { OrganizerScreen } from '../screens/OrganizerScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SocialScreen } from '../screens/SocialScreen';
@@ -30,8 +30,9 @@ type MainNavigatorProps = {
 export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavigatorProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [selectedExperience, setSelectedExperience] = useState<Experience | null>(null);
+  const [selectedOrganizerUserId, setSelectedOrganizerUserId] = useState<string | null>(null);
   const [selectedOrganizerExperienceId, setSelectedOrganizerExperienceId] = useState<string | null>(null);
-  const [experiences, setExperiences] = useState<Experience[]>(fallbackExperiences);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
   const [loadingExperiences, setLoadingExperiences] = useState(false);
   const [experienceError, setExperienceError] = useState<string | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -57,8 +58,8 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
     setLoadingExperiences(true);
     setExperienceError(null);
     try {
-      const nextExperiences = await listExperiences();
-      setExperiences(nextExperiences.length > 0 ? nextExperiences : fallbackExperiences);
+      const nextExperiences = await listExperiences(session);
+      setExperiences(nextExperiences);
     } catch (error) {
       setExperienceError(error instanceof Error ? error.message : 'No se pudo cargar experiencias');
     } finally {
@@ -77,7 +78,7 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     let mounted = true;
@@ -135,7 +136,14 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
       <ExperienceDetailScreen
         experience={selectedExperience}
         session={session}
-        onBack={() => setSelectedExperience(null)}
+        onBack={() => {
+          setSelectedExperience(null);
+          void refreshExperiences();
+        }}
+        onOpenOrganizerProfile={(userId) => {
+          setSelectedExperience(null);
+          setSelectedOrganizerUserId(userId);
+        }}
         onOpenOrganizer={() => {
           setSelectedOrganizerExperienceId(selectedExperience.id);
           setSelectedExperience(null);
@@ -143,7 +151,22 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
         }}
         onOpenWallet={() => {
           setSelectedExperience(null);
+          void refreshExperiences();
           setActiveTab('wallet');
+        }}
+      />
+    );
+  }
+
+  if (selectedOrganizerUserId) {
+    return (
+      <OrganizerProfileScreen
+        session={session}
+        organizerUserId={selectedOrganizerUserId}
+        onBack={() => setSelectedOrganizerUserId(null)}
+        onOpenExperience={(experience) => {
+          setSelectedOrganizerUserId(null);
+          setSelectedExperience(experience);
         }}
       />
     );
@@ -236,3 +259,5 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+

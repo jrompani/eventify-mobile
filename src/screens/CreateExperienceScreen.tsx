@@ -19,6 +19,7 @@ type CreateExperienceScreenProps = {
 export function CreateExperienceScreen({ session, onCreated }: CreateExperienceScreenProps) {
   const [type, setType] = useState<'PLAN' | 'EVENT'>('PLAN');
   const [entryMode, setEntryMode] = useState<'OPEN' | 'REQUEST'>('OPEN');
+  const [ageMin, setAgeMin] = useState<number | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [capacity, setCapacity] = useState('20');
@@ -57,6 +58,7 @@ export function CreateExperienceScreen({ session, onCreated }: CreateExperienceS
         startsAt: startsAt.toISOString(),
         capacity: Number.parseInt(capacity, 10) || undefined,
         entryMode,
+        ageMin: ageMin ?? undefined,
         verifiedOnly,
         publicLocation: {
           label: locationLabel.trim() || undefined,
@@ -77,6 +79,7 @@ export function CreateExperienceScreen({ session, onCreated }: CreateExperienceS
   function resetForm() {
     setType('PLAN');
     setEntryMode('OPEN');
+    setAgeMin(null);
     setTitle('');
     setDescription('');
     setCapacity('20');
@@ -296,6 +299,22 @@ export function CreateExperienceScreen({ session, onCreated }: CreateExperienceS
         <Segment label="Con solicitud" active={entryMode === 'REQUEST'} onPress={() => setEntryMode('REQUEST')} />
       </View>
 
+      <View style={styles.ageBlock}>
+        <Text style={styles.blockTitle}>Edad minima</Text>
+        <View style={styles.ageGrid}>
+          {ageOptions.map((option) => (
+            <Pressable
+              key={option.label}
+              style={[styles.ageOption, ageMin === option.value && styles.ageOptionActive]}
+              onPress={() => setAgeMin(option.value)}
+            >
+              <Text style={[styles.ageOptionText, ageMin === option.value && styles.ageOptionTextActive]}>{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {ageMin ? <Text style={styles.locationMessage}>Requiere verificacion de edad para reservar, comprar y entrar.</Text> : null}
+      </View>
+
       <Pressable style={styles.toggleRow} onPress={() => setVerifiedOnly((current) => !current)}>
         <View>
           <Text style={styles.toggleTitle}>Solo usuarios verificados</Text>
@@ -397,6 +416,14 @@ function Segment({ label, active, onPress }: { label: string; active: boolean; o
     </Pressable>
   );
 }
+
+const ageOptions: Array<{ label: string; value: number | null }> = [
+  { label: 'Sin restriccion', value: null },
+  { label: '+13', value: 13 },
+  { label: '+16', value: 16 },
+  { label: '+18', value: 18 },
+  { label: '+21', value: 21 },
+];
 
 type FieldProps = {
   label: string;
@@ -537,6 +564,42 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     gap: 10,
+  },
+  ageBlock: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    gap: 10,
+  },
+  ageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  ageOption: {
+    minHeight: 38,
+    minWidth: 78,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  ageOptionActive: {
+    borderColor: colors.warning,
+    backgroundColor: '#30240D',
+  },
+  ageOptionText: {
+    color: colors.muted,
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  ageOptionTextActive: {
+    color: colors.warning,
   },
   blockTitle: {
     color: colors.text,

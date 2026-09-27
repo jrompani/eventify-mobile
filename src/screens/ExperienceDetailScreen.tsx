@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CommerceOrder, createOrder, listTicketProducts, markOrderPaid, TicketProduct } from '../api/commerce';
 import {
@@ -23,14 +23,15 @@ type ExperienceDetailScreenProps = {
   session: AuthSession;
   onBack: () => void;
   onOpenOrganizer?: () => void;
+  onOpenOrganizerProfile?: (userId: string) => void;
   onOpenWallet?: () => void;
 };
 
-export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrganizer, onOpenWallet }: ExperienceDetailScreenProps) {
+export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrganizer, onOpenOrganizerProfile, onOpenWallet }: ExperienceDetailScreenProps) {
   const [interested, setInterested] = useState(false);
   const [joining, setJoining] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [participation, setParticipation] = useState<RegistrationResult | null>(null);
+  const [participation, setParticipation] = useState<RegistrationResult | null>(initialParticipationFor(experience));
   const [interestLoading, setInterestLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -45,8 +46,12 @@ export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrga
   const canUseApi = isUuid(experience.id);
   const canBlockOrganizer = Boolean(experience.ownerUserId && experience.ownerUserId !== session.user.id);
   const isOwner = experience.ownerUserId === session.user.id;
-  const organizerLabel = isOwner ? 'Tu organizacion' : 'Organizador Eventify';
-  const organizerMeta = isOwner ? 'Evento creado por tu cuenta' : 'Perfil basico pendiente de datos publicos';
+  const organizerLabel = isOwner ? 'Tu organizacion' : experience.organizer?.displayName ?? 'Organizador';
+  const organizerMeta = isOwner
+    ? 'Evento creado por tu cuenta'
+    : [experience.organizer?.username ? `@${experience.organizer.username}` : null, experience.organizer?.publicZone]
+      .filter(Boolean)
+      .join(' - ') || 'Perfil publico del organizador';
   const selectedProduct = ticketProducts.find((product) => product.id === selectedProductId) ?? ticketProducts[0] ?? null;
   const checkoutDisabled = canUseApi
     && (!selectedProduct || checkoutLoading || selectedProduct.status !== 'ACTIVE' || selectedProduct.availableQuantity <= 0);
@@ -213,6 +218,17 @@ export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrga
     }
   }
 
+  function confirmReportExperience() {
+    Alert.alert(
+      'Reportar experiencia',
+      'Usa reportes para fraude, acoso, riesgo real o contenido que rompa las reglas. El equipo revisa el caso y puede pedir mas informacion.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Reportar', style: 'destructive', onPress: () => void handleReportExperience() },
+      ]
+    );
+  }
+
   async function handleBlockOrganizer() {
     if (!experience.ownerUserId || experience.ownerUserId === session.user.id) {
       return;
@@ -228,6 +244,26 @@ export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrga
       setActionError(error instanceof Error ? error.message : 'No se pudo bloquear al organizador');
     } finally {
       setSafetyLoading(false);
+    }
+  }
+
+  function confirmBlockOrganizer() {
+    if (!canBlockOrganizer) {
+      return;
+    }
+    Alert.alert(
+      'Bloquear organizador',
+      'Vas a limitar interacciones y mensajes con este organizador. No se le avisa que lo bloqueaste.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Bloquear', style: 'destructive', onPress: () => void handleBlockOrganizer() },
+      ]
+    );
+  }
+
+  function openOrganizerProfile() {
+    if (experience.ownerUserId) {
+      onOpenOrganizerProfile?.(experience.ownerUserId);
     }
   }
 
@@ -271,25 +307,33 @@ export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrga
           <View style={styles.trustRow}>
             <InfoPill icon="shield-checkmark-outline" label={experience.trustLabel} tone="success" />
             <InfoPill icon="people-outline" label={`${experience.attendees} compatibles`} tone="primary" />
+            {experience.ageMin ? <InfoPill icon="id-card-outline" label={`+${experience.ageMin}`} tone="warning" /> : null}
           </View>
+          {experience.ageMin ? (
+            <Text style={styles.ageRequirement}>Requiere verificacion de edad para reservar, comprar y hacer check-in.</Text>
+          ) : null}
 
-          <View style={styles.organizerCard}>
-            <View style={styles.organizerAvatar}>
-              <Text style={styles.organizerInitial}>{initialsFor(organizerLabel)}</Text>
-            </View>
+          <Pressable style={styles.organizerCard} onPress={openOrganizerProfile} disabled={!experience.ownerUserId}>
+            {experience.organizer?.avatarUrl ? (
+              <Image source={{ uri: experience.organizer.avatarUrl }} style={styles.organizerAvatarImage} />
+            ) : (
+              <View style={styles.organizerAvatar}>
+                <Text style={styles.organizerInitial}>{initialsFor(organizerLabel)}</Text>
+              </View>
+            )}
             <View style={styles.organizerCopy}>
               <Text style={styles.organizerTitle}>{organizerLabel}</Text>
               <Text style={styles.organizerMeta}>{organizerMeta}</Text>
             </View>
             <Text style={styles.followText}>{isOwner ? 'Owner' : 'Ver'}</Text>
-          </View>
+          </Pressable>
 
           <View style={styles.block}>
             <View style={styles.blockHeader}>
               <Text style={styles.blockTitle}>Seguridad</Text>
               <Ionicons name="shield-outline" size={20} color={colors.primary} />
             </View>
-            <Text style={styles.blockMeta}>Reporta contenido riesgoso o bloquea al organizador si no queres interactuar.</Text>
+            <Text style={styles.blockMeta}>Reportar envia este evento a revision. Bloquear afecta tus interacciones con el organizador.</Text>
             <View style={styles.reasonRow}>
               {reportReasons.map((reason) => (
                 <Pressable
@@ -302,13 +346,13 @@ export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrga
               ))}
             </View>
             <View style={styles.safetyActions}>
-              <Pressable style={[styles.safetyButton, safetyLoading && styles.disabled]} onPress={handleReportExperience} disabled={safetyLoading}>
+              <Pressable style={[styles.safetyButton, (safetyLoading || isOwner) && styles.disabled]} onPress={confirmReportExperience} disabled={safetyLoading || isOwner}>
                 <Ionicons name="flag-outline" size={17} color={colors.danger} />
                 <Text style={styles.safetyButtonText}>Reportar</Text>
               </Pressable>
               <Pressable
                 style={[styles.safetyButton, (!canBlockOrganizer || safetyLoading) && styles.disabled]}
-                onPress={handleBlockOrganizer}
+                onPress={confirmBlockOrganizer}
                 disabled={!canBlockOrganizer || safetyLoading}
               >
                 <Ionicons name="ban-outline" size={17} color={colors.danger} />
@@ -457,6 +501,13 @@ export function ExperienceDetailScreen({ experience, session, onBack, onOpenOrga
   );
 }
 
+function initialParticipationFor(experience: Experience): RegistrationResult | null {
+  if (experience.viewerRegistration?.registered || experience.viewerRegistrationStatus === 'REGISTERED' || experience.status === 'Asistiras') {
+    return 'REGISTERED';
+  }
+  return null;
+}
+
 function messageForRegistration(result: string, waitlistPosition: number | null) {
   if (result === 'REGISTERED') {
     return 'Reserva confirmada. Tu SafePass queda asociado a esta experiencia.';
@@ -527,9 +578,9 @@ const reportReasons: Array<{ value: ReportReason; label: string }> = [
   { value: 'OTHER', label: 'Otro' },
 ];
 
-function InfoPill({ icon, label, tone }: { icon: keyof typeof Ionicons.glyphMap; label: string; tone: 'success' | 'primary' }) {
-  const color = tone === 'success' ? colors.success : colors.primary;
-  const backgroundColor = tone === 'success' ? colors.successSoft : colors.primarySoft;
+function InfoPill({ icon, label, tone }: { icon: keyof typeof Ionicons.glyphMap; label: string; tone: 'success' | 'primary' | 'warning' }) {
+  const color = tone === 'success' ? colors.success : tone === 'warning' ? colors.warning : colors.primary;
+  const backgroundColor = tone === 'success' ? colors.successSoft : tone === 'warning' ? '#30240D' : colors.primarySoft;
 
   return (
     <View style={[styles.infoPill, { backgroundColor }]}>
@@ -627,6 +678,7 @@ const styles = StyleSheet.create({
   },
   trustRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   infoPill: {
@@ -642,6 +694,11 @@ const styles = StyleSheet.create({
   infoPillText: {
     fontWeight: '900',
     fontSize: 12,
+  },
+  ageRequirement: {
+    color: colors.warning,
+    fontWeight: '800',
+    lineHeight: 19,
   },
   organizerCard: {
     backgroundColor: colors.surface,
@@ -660,6 +717,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  organizerAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: colors.primarySoft,
   },
   organizerInitial: {
     color: colors.primary,
@@ -1036,3 +1099,4 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
+

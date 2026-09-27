@@ -16,6 +16,7 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
         "android.permission.INTERNET"
       ],
       "blockedPermissions": [
@@ -39,6 +40,13 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Eventify usa tu ubicacion para mostrar experiencias cercanas en el mapa."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Eventify usa la camara para escanear QR de entradas en puerta.",
+          "recordAudioAndroid": false
         }
       ]
     ]

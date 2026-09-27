@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 import { listMyTickets, WalletTicketResponse } from '../api/registrations';
 import { EmptyState } from '../components/EmptyState';
@@ -99,6 +100,11 @@ export function WalletScreen({ session, experiences, onOpenExperience }: WalletS
 
             <View style={styles.codeBox}>
               <Text style={styles.codeLabel}>Codigo SafePass</Text>
+              {ticket.code ? (
+                <View style={styles.qrBox}>
+                  <QRCode value={ticket.code} size={154} backgroundColor="#FFFFFF" color="#080B12" />
+                </View>
+              ) : null}
               <Text style={styles.code}>{ticket.code ?? 'PENDIENTE'}</Text>
             </View>
 
@@ -301,7 +307,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   codeBox: {
-    minHeight: 82,
+    minHeight: 256,
     borderRadius: 8,
     backgroundColor: colors.black,
     borderColor: colors.borderLight,
@@ -309,6 +315,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
+    gap: 10,
+  },
+  qrBox: {
+    width: 174,
+    height: 174,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   codeLabel: {
     color: colors.muted,

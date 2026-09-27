@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   addOrganizerStaff,
@@ -16,6 +17,8 @@ import {
   rejectOrganizerRequest,
   listOrganizerEvents,
   removeOrganizerStaff,
+  sendOrganizerAnnouncement,
+  updateOrganizerExperience,
 } from '../api/organizer';
 import { createTicketProduct } from '../api/commerce';
 import { searchUsers, UserSearchResult } from '../api/users';
@@ -33,6 +36,7 @@ type OrganizerScreenProps = {
 };
 
 export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScreenProps) {
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [events, setEvents] = useState<OrganizerEventSummary[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<OrganizerDashboard | null>(null);
@@ -43,6 +47,8 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
   const [actingRequestId, setActingRequestId] = useState<string | null>(null);
   const [checkInCode, setCheckInCode] = useState('');
   const [checkingIn, setCheckingIn] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scannerLocked, setScannerLocked] = useState(false);
   const [rosterQuery, setRosterQuery] = useState('');
   const [checkingRosterRegistrationId, setCheckingRosterRegistrationId] = useState<string | null>(null);
   const [staffUserId, setStaffUserId] = useState('');
@@ -56,6 +62,13 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
   const [productPrice, setProductPrice] = useState('');
   const [productQuantity, setProductQuantity] = useState('');
   const [savingProduct, setSavingProduct] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editStartsAt, setEditStartsAt] = useState('');
+  const [editCapacity, setEditCapacity] = useState('');
+  const [savingEvent, setSavingEvent] = useState(false);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementBody, setAnnouncementBody] = useState('');
+  const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +87,14 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
       void loadDashboard(selectedEventId);
     }
   }, [selectedEventId]);
+  useEffect(() => {
+    if (!dashboard) {
+      return;
+    }
+    setEditTitle(dashboard.summary.title);
+    setEditStartsAt(toLocalInputValue(dashboard.summary.startsAt));
+    setEditCapacity(dashboard.summary.capacity == null ? '' : `${dashboard.summary.capacity}`);
+  }, [dashboard?.summary.id, dashboard?.summary.title, dashboard?.summary.startsAt, dashboard?.summary.capacity]);
 
   async function loadEvents() {
     setLoadingEvents(true);
@@ -154,6 +175,45 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
       await loadDashboard(selectedEventId);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo confirmar el acceso');
+    } finally {
+      setCheckingIn(false);
+    }
+  }
+
+  async function handleOpenScanner() {
+    if (!selectedEventId || Platform.OS === 'web') {
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
+    if (!permission.granted) {
+      setError('Necesitas habilitar la camara para escanear QR.');
+      return;
+    }
+    setScannerLocked(false);
+    setScannerVisible(true);
+  }
+
+  async function handleQrScanned(result: BarcodeScanningResult) {
+    const code = result.data.trim();
+    if (!selectedEventId || scannerLocked || !code) {
+      return;
+    }
+
+    setScannerLocked(true);
+    setCheckingIn(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await checkInByEntitlementCode(session, selectedEventId, code);
+      setMessage(`QR aceptado: ${response.userEmail}`);
+      setScannerVisible(false);
+      await loadDashboard(selectedEventId);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'QR invalido o acceso no permitido');
+      setScannerLocked(false);
     } finally {
       setCheckingIn(false);
     }
@@ -240,6 +300,81 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
     }
   }
 
+  async function handleUpdateEvent() {
+    if (!selectedEventId || !dashboard) {
+      return;
+    }
+    const title = editTitle.trim();
+    const startsAt = parseLocalDateTime(editStartsAt);
+    const capacity = editCapacity.trim() ? Number(editCapacity) : undefined;
+    if (!title || !startsAt || (capacity !== undefined && (!Number.isFinite(capacity) || capacity < 0))) {
+      setError('Revisa titulo, fecha/hora y capacidad.');
+      return;
+    }
+
+    setSavingEvent(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await updateOrganizerExperience(session, selectedEventId, {
+        title,
+        startsAt: startsAt.toISOString(),
+        capacity: capacity === undefined ? undefined : Math.round(capacity),
+      });
+      setMessage('Evento actualizado. Si cambiaste fecha u horario, se notifico a los registrados.');
+      await loadEvents();
+      await loadDashboard(selectedEventId);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo actualizar el evento');
+    } finally {
+      setSavingEvent(false);
+    }
+  }
+
+  async function handleCancelEvent() {
+    if (!selectedEventId) {
+      return;
+    }
+
+    setSavingEvent(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await updateOrganizerExperience(session, selectedEventId, { status: 'CANCELLED' });
+      setMessage('Evento cancelado. Se notifico a los registrados.');
+      await loadEvents();
+      await loadDashboard(selectedEventId);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo cancelar el evento');
+    } finally {
+      setSavingEvent(false);
+    }
+  }
+
+  async function handleSendAnnouncement() {
+    if (!selectedEventId || !announcementTitle.trim() || !announcementBody.trim()) {
+      return;
+    }
+
+    setSendingAnnouncement(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const announcement = await sendOrganizerAnnouncement(session, selectedEventId, {
+        title: announcementTitle.trim(),
+        body: announcementBody.trim(),
+        audience: 'REGISTERED',
+      });
+      setMessage(`Comunicado enviado a ${announcement.notifiedCount} asistentes.`);
+      setAnnouncementTitle('');
+      setAnnouncementBody('');
+      await loadDashboard(selectedEventId);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : 'No se pudo enviar el comunicado');
+    } finally {
+      setSendingAnnouncement(false);
+    }
+  }
   async function handleCreateProduct() {
     if (!selectedEventId || !productName.trim()) {
       return;
@@ -325,6 +460,90 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
             <Metric label="Ventas" value={formatMoney(dashboard.summary.grossSalesAmount, dashboard.summary.grossSalesCurrency)} />
           </View>
 
+          <View style={styles.block}>
+            <SectionHeader title="Editar evento" meta="Los cambios criticos notifican a registrados" />
+            <TextInput
+              value={editTitle}
+              onChangeText={setEditTitle}
+              placeholder="Titulo del evento"
+              placeholderTextColor={colors.subtle}
+              style={styles.input}
+            />
+            <TextInput
+              value={editStartsAt}
+              onChangeText={setEditStartsAt}
+              placeholder="AAAA-MM-DDTHH:mm"
+              placeholderTextColor={colors.subtle}
+              style={styles.input}
+              autoCapitalize="none"
+            />
+            <TextInput
+              value={editCapacity}
+              onChangeText={setEditCapacity}
+              placeholder="Capacidad"
+              placeholderTextColor={colors.subtle}
+              style={styles.input}
+              keyboardType="numeric"
+            />
+            <View style={styles.rowActionsWide}>
+              <Pressable
+                style={[styles.primaryButton, (!editTitle.trim() || !editStartsAt.trim() || savingEvent) && styles.disabled]}
+                onPress={handleUpdateEvent}
+                disabled={!editTitle.trim() || !editStartsAt.trim() || savingEvent}
+              >
+                <Text style={styles.primaryButtonText}>{savingEvent ? 'Guardando...' : 'Guardar cambios'}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.dangerButton, (savingEvent || dashboard.summary.status === 'CANCELLED') && styles.disabled]}
+                onPress={handleCancelEvent}
+                disabled={savingEvent || dashboard.summary.status === 'CANCELLED'}
+              >
+                <Text style={styles.dangerButtonText}>Cancelar evento</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.block}>
+            <SectionHeader title="Comunicado oficial" meta="Mensaje a asistentes registrados" />
+            <TextInput
+              value={announcementTitle}
+              onChangeText={setAnnouncementTitle}
+              placeholder="Titulo del aviso"
+              placeholderTextColor={colors.subtle}
+              style={styles.input}
+            />
+            <TextInput
+              value={announcementBody}
+              onChangeText={setAnnouncementBody}
+              placeholder="Mensaje para quienes asisten"
+              placeholderTextColor={colors.subtle}
+              style={[styles.input, styles.textArea]}
+              multiline
+            />
+            <Pressable
+              style={[styles.primaryButton, (!announcementTitle.trim() || !announcementBody.trim() || sendingAnnouncement) && styles.disabled]}
+              onPress={handleSendAnnouncement}
+              disabled={!announcementTitle.trim() || !announcementBody.trim() || sendingAnnouncement}
+            >
+              <Text style={styles.primaryButtonText}>{sendingAnnouncement ? 'Enviando...' : 'Enviar comunicado'}</Text>
+            </Pressable>
+            {(dashboard.announcements ?? []).length > 0 ? (
+              (dashboard.announcements ?? []).map((announcement) => (
+                <View key={announcement.id} style={styles.announcementRow}>
+                  <View style={styles.auditIcon}>
+                    <Ionicons name={announcement.automatic ? 'megaphone-outline' : 'mail-outline'} size={18} color={colors.success} />
+                  </View>
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.rowTitle}>{announcement.title}</Text>
+                    <Text style={styles.rowMeta}>{announcement.notifiedCount} notificados - {formatShortDate(announcement.createdAt)}</Text>
+                    <Text style={styles.auditMeta} numberOfLines={3}>{announcement.body}</Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.metaText}>Todavia no hay comunicados para este evento.</Text>
+            )}
+          </View>
           <View style={styles.gateStatus}>
             <View style={styles.gateIcon}>
               <Ionicons name="scan-outline" size={22} color={colors.success} />
@@ -357,6 +576,16 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
             >
               <Text style={styles.primaryButtonText}>{checkingIn ? 'Confirmando...' : 'Confirmar acceso'}</Text>
             </Pressable>
+            {Platform.OS !== 'web' ? (
+              <Pressable
+                style={[styles.scanButton, (!selectedEventId || checkingIn) && styles.disabled]}
+                onPress={handleOpenScanner}
+                disabled={!selectedEventId || checkingIn}
+              >
+                <Ionicons name="qr-code-outline" size={18} color={colors.primary} />
+                <Text style={styles.scanButtonText}>Escanear QR</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <View style={styles.block}>
@@ -661,8 +890,51 @@ export function OrganizerScreen({ session, preferredExperienceId }: OrganizerScr
           </View>
         </>
       ) : null}
+
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+        <View style={styles.scannerScreen}>
+          <View style={styles.scannerHeader}>
+            <View>
+              <Text style={styles.scannerTitle}>Escanear QR</Text>
+              <Text style={styles.scannerMeta}>{scannerLocked ? 'Validando acceso...' : 'Apunta al QR de la wallet del asistente'}</Text>
+            </View>
+            <Pressable style={styles.closeScannerButton} onPress={() => setScannerVisible(false)}>
+              <Ionicons name="close" size={20} color={colors.text} />
+            </Pressable>
+          </View>
+          {scannerVisible ? (
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={scannerLocked ? undefined : handleQrScanned}
+            >
+              <View style={styles.scanFrame}>
+                <View style={styles.scanCorner} />
+              </View>
+            </CameraView>
+          ) : null}
+          <View style={styles.scannerFooter}>
+            <Text style={styles.scannerFooterText}>El QR usa el codigo unico del ticket y se marca como usado al aceptar el acceso.</Text>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
+}
+
+function toLocalInputValue(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function parseLocalDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -727,6 +999,9 @@ function labelForAudit(action: string) {
     WAITLIST_OFFERED: 'Oferta de waitlist',
     WAITLIST_ACCEPTED: 'Waitlist aceptada',
     WAITLIST_DECLINED: 'Waitlist declinada',
+    EVENT_UPDATED: 'Evento actualizado',
+    EVENT_CANCELLED: 'Evento cancelado',
+    EVENT_ANNOUNCEMENT_SENT: 'Comunicado enviado',
   };
   return labels[action] ?? action;
 }
@@ -885,6 +1160,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  rowActionsWide: {
+    gap: 8,
+  },
+  dangerButton: {
+    minHeight: 46,
+    borderRadius: 8,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerButtonText: {
+    color: colors.danger,
+    fontWeight: '900',
+  },
   firstTicketBox: {
     minHeight: 64,
     borderRadius: 8,
@@ -959,6 +1250,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontWeight: '800',
   },
+  textArea: {
+    minHeight: 96,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
   primaryButton: {
     minHeight: 46,
     borderRadius: 8,
@@ -968,6 +1264,21 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.black,
+    fontWeight: '900',
+  },
+  scanButton: {
+    minHeight: 46,
+    borderRadius: 8,
+    borderColor: colors.primary,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  scanButtonText: {
+    color: colors.primary,
     fontWeight: '900',
   },
   requestRow: {
@@ -1172,6 +1483,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 12,
   },
+  announcementRow: {
+    minHeight: 74,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
   auditRow: {
     minHeight: 68,
     borderRadius: 8,
@@ -1262,4 +1583,70 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.55,
   },
+  scannerScreen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scannerHeader: {
+    minHeight: 86,
+    padding: 16,
+    paddingTop: 22,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  scannerTitle: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  scannerMeta: {
+    color: colors.muted,
+    marginTop: 4,
+    fontWeight: '800',
+  },
+  closeScannerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  camera: {
+    flex: 1,
+  },
+  scanFrame: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  scanCorner: {
+    width: 236,
+    height: 236,
+    borderRadius: 8,
+    borderColor: colors.primary,
+    borderWidth: 3,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  scannerFooter: {
+    minHeight: 74,
+    padding: 16,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+  },
+  scannerFooterText: {
+    color: colors.muted,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
 });
+

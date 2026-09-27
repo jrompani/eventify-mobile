@@ -7,12 +7,13 @@ type AuthFieldProps = TextInputProps & {
 };
 
 export function AuthField({ label, ...props }: AuthFieldProps) {
+  const multiline = Boolean(props.multiline);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         placeholderTextColor={colors.subtle}
-        style={styles.input}
+        style={[styles.input, multiline && styles.textArea, props.style]}
         autoCapitalize="none"
         {...props}
       />
@@ -40,5 +41,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
     fontWeight: '800',
+  },
+  textArea: {
+    minHeight: 118,
+    paddingTop: 12,
+    textAlignVertical: 'top',
   },
 });

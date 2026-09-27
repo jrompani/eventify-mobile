@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { listMyAttendance, AttendanceRecord } from '../api/attendance';
 import { updateProfile } from '../api/auth';
 import { getVerifications, getRestrictions, Restriction, Verification } from '../api/identityTrust';
+import { PlaceResult, searchPlaces } from '../api/places';
 import { getProfileOverview, ProfileOverview } from '../api/profile';
 import { getProgression, XpSummary } from '../api/progression';
 import { getReputation, ReputationSummary } from '../api/reputation';
@@ -23,10 +25,11 @@ import { validateBirthYear, validateDisplayName, validateOptionalUrl, validateUs
 
 type ProfileScreenProps = {
   session: AuthSession;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
   onSessionUpdated: (session: AuthSession) => void;
 };
 
+type ProfileGender = 'FEMALE' | 'MALE' | 'OTHER' | 'PREFER_NOT_TO_SAY';
 type ProfileSheet = 'profile' | 'progress' | 'attendance' | 'trust' | 'blocks' | 'edit';
 
 export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileScreenProps) {
@@ -35,6 +38,7 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
   const [publicZone, setPublicZone] = useState(session.user.profile.publicZone ?? '');
   const [avatarUrl, setAvatarUrl] = useState(session.user.profile.avatarUrl ?? '');
   const [birthYear, setBirthYear] = useState(session.user.profile.birthYear ? `${session.user.profile.birthYear}` : '');
+  const [gender, setGender] = useState<ProfileGender | null>(session.user.profile.gender);
   const [interests, setInterests] = useState<string[]>(session.user.profile.interests ?? []);
   const [bio, setBio] = useState(session.user.profile.bio ?? '');
   const [saving, setSaving] = useState(false);
@@ -51,6 +55,9 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
   const [error, setError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(null);
+  const [zoneSuggestions, setZoneSuggestions] = useState<PlaceResult[]>([]);
+  const [zoneSearching, setZoneSearching] = useState(false);
+  const [interestPickerVisible, setInterestPickerVisible] = useState(false);
   const user = overview?.user ?? session.user;
   const capabilities = overview?.capabilities ?? null;
   const stats = overview?.stats ?? null;
@@ -59,6 +66,43 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
   useEffect(() => {
     void loadProfileData();
   }, [session.email]);
+
+  useEffect(() => {
+    if (activeSheet !== 'edit') {
+      setZoneSuggestions([]);
+      return;
+    }
+
+    const query = publicZone.trim();
+    if (query.length < 3) {
+      setZoneSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setZoneSearching(true);
+      try {
+        const results = await searchPlaces(session, query, null);
+        if (!cancelled) {
+          setZoneSuggestions(results.slice(0, 5));
+        }
+      } catch {
+        if (!cancelled) {
+          setZoneSuggestions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setZoneSearching(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [activeSheet, publicZone, session]);
 
   async function loadProfileData() {
     setLoadingProfile(true);
@@ -85,6 +129,7 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
       setPublicZone(nextOverview.user.profile.publicZone ?? '');
       setAvatarUrl(nextOverview.user.profile.avatarUrl ?? '');
       setBirthYear(nextOverview.user.profile.birthYear ? `${nextOverview.user.profile.birthYear}` : '');
+      setGender(nextOverview.user.profile.gender);
       setInterests(nextOverview.user.profile.interests ?? []);
       setBio(nextOverview.user.profile.bio ?? '');
     } catch (exception) {
@@ -97,7 +142,7 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
   async function handleSave() {
     const validationError = validateDisplayName(displayName)
       ?? validateUsername(username)
-      ?? validateOptionalUrl(avatarUrl, 'La foto de perfil')
+      ?? validateAvatarValue(avatarUrl)
       ?? validateBirthYear(birthYear);
     if (validationError) {
       setMessage(null);
@@ -117,6 +162,7 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
           publicZone: publicZone.trim() || undefined,
           avatarUrl: avatarUrl.trim() || undefined,
           birthYear: parseBirthYear(birthYear),
+          gender: gender ?? undefined,
           interests,
           bio: bio.trim() || undefined,
         }
@@ -132,6 +178,38 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
     }
   }
 
+  async function pickProfileImage() {
+    setMessage(null);
+    setError(null);
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError('Necesitamos permiso para abrir tus fotos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUrl(result.assets[0].uri);
+    }
+  }
+
+  function applyZoneSuggestion(place: PlaceResult) {
+    setPublicZone(place.address || place.name);
+    setZoneSuggestions([]);
+  }
+
+  function addInterest(interest: string) {
+    setInterests((current) => current.includes(interest) ? current : [...current, interest]);
+    setInterestPickerVisible(false);
+  }
+
   async function handleUnblock(userId: string) {
     setUnblockingId(userId);
     setMessage(null);
@@ -145,6 +223,17 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
     } finally {
       setUnblockingId(null);
     }
+  }
+
+  function confirmLogout() {
+    Alert.alert(
+      'Cerrar sesion',
+      'Vas a salir de esta cuenta. La proxima vez que uses Google podras elegir otra cuenta.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar sesion', style: 'destructive', onPress: () => void onLogout() },
+      ]
+    );
   }
 
   return (
@@ -205,9 +294,9 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
         </View>
       </View>
 
-      <Pressable style={styles.logoutButton} onPress={onLogout}>
-        <Ionicons name="swap-horizontal-outline" size={18} color={colors.danger} />
-        <Text style={styles.logoutText}>Cambiar usuario</Text>
+      <Pressable style={styles.logoutButton} onPress={confirmLogout}>
+        <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+        <Text style={styles.logoutText}>Cerrar sesion</Text>
       </Pressable>
 
       <ProfileModal
@@ -218,6 +307,7 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
         <FormBlock>
           <LabeledValue label="Zona publica" value={user.profile.publicZone ?? 'No configurada'} />
           <LabeledValue label="Edad" value={ageLabel(user.profile.birthYear)} />
+          <LabeledValue label="Genero" value={genderLabel(user.profile.gender)} />
           <LabeledValue label="Entradas activas" value={`${stats?.activeTicketCount ?? 0}`} />
           <LabeledValue label="Asistencias verificadas" value={`${stats?.checkedInCount ?? reputation?.attendedCount ?? 0}`} />
           <LabeledValue label="Experiencias creadas" value={`${stats?.createdExperienceCount ?? 0}`} />
@@ -348,26 +438,68 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
 
       <ProfileModal visible={activeSheet === 'edit'} title="Editar perfil" onClose={() => setActiveSheet(null)}>
         <View style={styles.editor}>
+          <Pressable style={styles.avatarPicker} onPress={pickProfileImage}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarPickerImage} />
+            ) : (
+              <View style={styles.avatarPickerEmpty}>
+                <Text style={styles.profileAvatarText}>{initials}</Text>
+              </View>
+            )}
+            <View style={styles.avatarPickerCopy}>
+              <Text style={styles.rowTitle}>Foto de perfil</Text>
+              <Text style={styles.rowMeta}>Toca para elegir una imagen del celular</Text>
+            </View>
+            <Ionicons name="image-outline" size={20} color={colors.primary} />
+          </Pressable>
           <Field label="Nombre visible" value={displayName} onChangeText={setDisplayName} placeholder="Nombre visible" />
           <Field label="Usuario" value={username} onChangeText={setUsername} placeholder="usuario" />
           <Field label="Foto de perfil URL" value={avatarUrl} onChangeText={setAvatarUrl} placeholder="https://..." />
           <Field label="Anio de nacimiento" value={birthYear} onChangeText={setBirthYear} placeholder="1998" keyboardType="number-pad" />
+          <View style={styles.interestsBlock}>
+            <Text style={styles.label}>Genero</Text>
+            <View style={styles.chipRow}>
+              {genderOptions.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[styles.editInterestChip, gender === option.value && styles.editInterestChipActive]}
+                  onPress={() => setGender(option.value)}
+                >
+                  <Text style={[styles.editInterestText, gender === option.value && styles.editInterestTextActive]}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
           <Field label="Zona publica" value={publicZone} onChangeText={setPublicZone} placeholder="Tu barrio o ciudad" />
+          {zoneSearching ? <Text style={styles.metaText}>Buscando zonas...</Text> : null}
+          {zoneSuggestions.length > 0 ? (
+            <View style={styles.suggestionList}>
+              {zoneSuggestions.map((place) => (
+                <Pressable key={place.placeId} style={styles.suggestionRow} onPress={() => applyZoneSuggestion(place)}>
+                  <Ionicons name="location-outline" size={18} color={colors.warning} />
+                  <View style={styles.suggestionCopy}>
+                    <Text style={styles.rowTitle}>{place.name}</Text>
+                    <Text style={styles.rowMeta}>{place.address}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           <View style={styles.interestsBlock}>
             <Text style={styles.label}>Intereses</Text>
             <View style={styles.chipRow}>
-              {interestOptions.map((interest) => {
-                const selected = interests.includes(interest);
-                return (
+              {interests.map((interest) => (
                   <Pressable
                     key={interest}
-                    style={[styles.editInterestChip, selected && styles.editInterestChipActive]}
-                    onPress={() => setInterests((current) => toggleInterest(current, interest))}
+                    style={[styles.editInterestChip, styles.editInterestChipActive]}
+                    onPress={() => setInterests((current) => current.filter((item) => item !== interest))}
                   >
-                    <Text style={[styles.editInterestText, selected && styles.editInterestTextActive]}>{interest}</Text>
+                    <Text style={[styles.editInterestText, styles.editInterestTextActive]}>{interest} x</Text>
                   </Pressable>
-                );
-              })}
+              ))}
+              <Pressable style={styles.addInterestButton} onPress={() => setInterestPickerVisible(true)}>
+                <Ionicons name="add" size={18} color={colors.black} />
+              </Pressable>
             </View>
           </View>
           <Field
@@ -382,6 +514,17 @@ export function ProfileScreen({ session, onLogout, onSessionUpdated }: ProfileSc
           <Pressable style={[styles.saveButton, saving && styles.disabled]} onPress={handleSave} disabled={saving}>
             <Text style={styles.saveText}>{saving ? 'Guardando...' : 'Guardar cambios'}</Text>
           </Pressable>
+        </View>
+      </ProfileModal>
+
+      <ProfileModal visible={interestPickerVisible} title="Agregar interes" onClose={() => setInterestPickerVisible(false)}>
+        <View style={styles.editor}>
+          {interestOptions.filter((interest) => !interests.includes(interest)).map((interest) => (
+            <Pressable key={interest} style={styles.selectOption} onPress={() => addInterest(interest)}>
+              <Text style={styles.selectOptionText}>{interest}</Text>
+              <Ionicons name="add" size={18} color={colors.primary} />
+            </Pressable>
+          ))}
         </View>
       </ProfileModal>
     </ScrollView>
@@ -509,6 +652,12 @@ function bandLabel(value: string | undefined) {
 }
 
 const interestOptions = ['Electronica', 'Rooftops', 'After office', 'Arte', 'Food', 'Networking', 'Outdoor', 'Tranquilo', 'Fiesta'];
+const genderOptions: Array<{ value: ProfileGender; label: string }> = [
+  { value: 'FEMALE', label: 'Mujer' },
+  { value: 'MALE', label: 'Hombre' },
+  { value: 'OTHER', label: 'Otro' },
+  { value: 'PREFER_NOT_TO_SAY', label: 'Prefiero no decir' },
+];
 
 function toggleInterest(current: string[], interest: string) {
   return current.includes(interest)
@@ -521,12 +670,24 @@ function parseBirthYear(value: string) {
   return Number.isFinite(year) ? year : undefined;
 }
 
+function validateAvatarValue(value: string) {
+  const avatar = value.trim();
+  if (!avatar || avatar.startsWith('file:') || avatar.startsWith('content:') || avatar.startsWith('data:')) {
+    return null;
+  }
+  return validateOptionalUrl(value, 'La foto de perfil');
+}
+
 function ageLabel(birthYear: number | null) {
   if (!birthYear) {
     return 'No configurada';
   }
   const age = new Date().getFullYear() - birthYear;
   return age > 0 ? `${age}` : 'No configurada';
+}
+
+function genderLabel(gender: ProfileGender | null) {
+  return genderOptions.find((option) => option.value === gender)?.label ?? 'No configurado';
 }
 
 const styles = StyleSheet.create({
@@ -636,6 +797,36 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarPicker: {
+    minHeight: 72,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarPickerImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primarySoft,
+  },
+  avatarPickerEmpty: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPickerCopy: {
+    flex: 1,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -838,6 +1029,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  suggestionList: {
+    gap: 8,
+  },
+  suggestionRow: {
+    minHeight: 52,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  suggestionCopy: {
+    flex: 1,
+  },
   trustChip: {
     color: colors.warning,
     backgroundColor: colors.black,
@@ -890,7 +1098,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   textArea: {
-    minHeight: 82,
+    minHeight: 132,
     paddingTop: 11,
     textAlignVertical: 'top',
   },
@@ -911,6 +1119,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
   },
+  addInterestButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   editInterestText: {
     color: colors.muted,
     fontWeight: '900',
@@ -928,6 +1144,21 @@ const styles = StyleSheet.create({
   },
   saveText: {
     color: colors.black,
+    fontWeight: '900',
+  },
+  selectOption: {
+    minHeight: 46,
+    borderRadius: 8,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.black,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectOptionText: {
+    color: colors.text,
     fontWeight: '900',
   },
   disabled: {

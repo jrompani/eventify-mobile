@@ -2,12 +2,19 @@ import { apiFetch } from './client';
 import { authOptionsFor } from './sessionAuth';
 import { experiences as fallbackExperiences } from '../data/mockExperiences';
 import { AuthSession } from '../types/auth';
-import { Experience, ExperienceLocation } from '../types/experience';
+import { Experience, ExperienceLocation, ViewerRegistration } from '../types/experience';
 
-type ApiExperience = {
+export type ApiExperience = {
   id: string;
   type: 'PROPOSAL' | 'PLAN' | 'EVENT';
   ownerUserId?: string;
+  organizer?: {
+    userId: string;
+    displayName: string;
+    username: string | null;
+    publicZone: string | null;
+    avatarUrl: string | null;
+  };
   title: string;
   description: string | null;
   status: string;
@@ -16,8 +23,11 @@ type ApiExperience = {
   publicLocation: ApiLocation | null;
   accessPolicy?: {
     entryMode: string;
+    ageMin: number | null;
     verifiedOnly: boolean;
   };
+  viewerRegistration?: ViewerRegistration | null;
+  viewerRegistrationStatus?: string | null;
 };
 
 type ApiLocation = {
@@ -39,6 +49,7 @@ export type CreateExperienceInput = {
   startsAt: string;
   capacity?: number;
   entryMode: 'OPEN' | 'REQUEST';
+  ageMin?: number;
   verifiedOnly: boolean;
   publicLocation?: {
     label?: string;
@@ -50,8 +61,8 @@ export type CreateExperienceInput = {
 
 const imagePool = fallbackExperiences.map((experience) => experience.imageUrl);
 
-export async function listExperiences(): Promise<Experience[]> {
-  const page = await apiFetch<ApiExperiencePage>('/experiences?page=0&size=20');
+export async function listExperiences(session?: AuthSession): Promise<Experience[]> {
+  const page = await apiFetch<ApiExperiencePage>('/experiences?page=0&size=20', session ? authOptionsFor(session) : undefined);
   return page.content.map(toExperience);
 }
 
@@ -68,6 +79,7 @@ export async function createExperience(session: AuthSession, input: CreateExperi
       timezone: 'America/Argentina/Buenos_Aires',
       capacity: input.capacity,
       entryMode: input.entryMode,
+      ageMin: input.ageMin,
       verifiedOnly: input.verifiedOnly,
       publicLocation: input.publicLocation,
     }),
@@ -84,7 +96,7 @@ export async function createExperience(session: AuthSession, input: CreateExperi
   return toExperience(published, 0);
 }
 
-function toExperience(apiExperience: ApiExperience, index: number): Experience {
+export function toExperience(apiExperience: ApiExperience, index: number): Experience {
   const date = new Date(apiExperience.startsAt);
   const fallback = fallbackExperiences[index % fallbackExperiences.length];
   const kind = apiExperience.type === 'EVENT' ? 'Evento' : apiExperience.type === 'PLAN' ? 'Plan' : 'Propuesta';
@@ -93,19 +105,36 @@ function toExperience(apiExperience: ApiExperience, index: number): Experience {
   return {
     id: apiExperience.id,
     ownerUserId: apiExperience.ownerUserId,
+    organizer: apiExperience.organizer,
     title: apiExperience.title,
     kind,
     time: formatDate(date),
     place: apiExperience.publicLocation?.label || apiExperience.publicLocation?.addressPublic || fallback.place,
     price,
     status: ctaFor(apiExperience),
+    viewerRegistration: apiExperience.viewerRegistration ?? null,
+    viewerRegistrationStatus: apiExperience.viewerRegistrationStatus ?? apiExperience.viewerRegistration?.status ?? null,
     attendees: apiExperience.capacity ?? fallback.attendees,
     distance: fallback.distance,
     trustLabel: apiExperience.accessPolicy?.verifiedOnly ? 'Verificado' : fallback.trustLabel,
     imageUrl: imagePool[index % imagePool.length],
-    tags: [kind, apiExperience.status, apiExperience.accessPolicy?.entryMode ?? 'OPEN'],
+    tags: buildTags(kind, apiExperience),
+    entryMode: apiExperience.accessPolicy?.entryMode ?? 'OPEN',
+    verifiedOnly: Boolean(apiExperience.accessPolicy?.verifiedOnly),
+    ageMin: apiExperience.accessPolicy?.ageMin ?? null,
     location: toLocation(apiExperience.publicLocation, fallback.location),
   };
+}
+
+function buildTags(kind: string, apiExperience: ApiExperience) {
+  const tags = [kind, apiExperience.status, apiExperience.accessPolicy?.entryMode ?? 'OPEN'];
+  if (apiExperience.accessPolicy?.verifiedOnly) {
+    tags.push('Verificado');
+  }
+  if (apiExperience.accessPolicy?.ageMin) {
+    tags.push(`+${apiExperience.accessPolicy.ageMin}`);
+  }
+  return tags;
 }
 
 function toLocation(apiLocation: ApiLocation | null, fallback?: ExperienceLocation): ExperienceLocation | undefined {
@@ -134,6 +163,9 @@ function formatDate(date: Date) {
 }
 
 function ctaFor(experience: ApiExperience) {
+  if (experience.viewerRegistration?.registered || experience.viewerRegistrationStatus === 'REGISTERED') {
+    return 'Asistiras';
+  }
   if (experience.type === 'PLAN') {
     return experience.accessPolicy?.entryMode === 'REQUEST' ? 'Solicitar unirme' : 'Me sumo';
   }
@@ -142,3 +174,4 @@ function ctaFor(experience: ApiExperience) {
   }
   return 'Ver detalle';
 }
+

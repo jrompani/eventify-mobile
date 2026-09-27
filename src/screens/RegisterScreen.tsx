@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { register, sessionFromAuthResponse, socialLogin } from '../api/auth';
-import { getGoogleIdToken } from '../auth/googleAuth';
+import { getGoogleAuthTokens } from '../auth/googleAuth';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { SocialAuthButtons, SocialProvider } from '../components/SocialAuthButtons';
@@ -56,8 +56,8 @@ export function RegisterScreen({ onBack, onAuthenticated }: RegisterScreenProps)
     setSocialSubmitting(true);
     setError(null);
     try {
-      const idToken = await getGoogleIdToken();
-      const response = await socialLogin({ provider: 'GOOGLE', idToken });
+      const tokens = await getGoogleAuthTokens({ forceAccountPicker: true });
+      const response = await socialLogin({ provider: 'GOOGLE', ...tokens, createIfMissing: true });
       onAuthenticated(sessionFromAuthResponse(response));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : 'No se pudo continuar con Google');

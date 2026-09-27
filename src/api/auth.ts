@@ -17,6 +17,8 @@ export type LoginInput = {
 export type SocialLoginInput = {
   provider: 'GOOGLE';
   idToken: string;
+  accessToken?: string;
+  createIfMissing?: boolean;
 };
 
 export type UpdateProfileInput = {
@@ -25,7 +27,9 @@ export type UpdateProfileInput = {
   bio?: string;
   publicZone?: string;
   avatarUrl?: string;
+  birthDate?: string;
   birthYear?: number;
+  gender?: 'FEMALE' | 'MALE' | 'OTHER' | 'PREFER_NOT_TO_SAY';
   interests?: string[];
 };
 

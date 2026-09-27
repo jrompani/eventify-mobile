@@ -7,6 +7,7 @@ import { AuthNavigator } from './src/navigation/AuthNavigator';
 import { MainNavigator } from './src/navigation/MainNavigator';
 import { logout, refreshSession, sessionFromAuthResponse } from './src/api/auth';
 import { shouldRefreshSession } from './src/api/sessionAuth';
+import { signOutGoogle } from './src/auth/googleAuth';
 import { LoadingScreen } from './src/screens/LoadingScreen';
 import { clearSession, loadSession, saveSession } from './src/storage/sessionStorage';
 import { colors } from './src/theme/colors';
@@ -59,6 +60,7 @@ export default function App() {
         // Local logout should still work if the session is already expired or the network is down.
       }
     }
+    await signOutGoogle();
     await clearSession();
     setSession(null);
   }

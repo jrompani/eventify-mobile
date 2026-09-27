@@ -6,7 +6,9 @@ export type UserProfile = {
   bio: string | null;
   publicZone: string | null;
   avatarUrl: string | null;
+  birthDate: string | null;
   birthYear: number | null;
+  gender: 'FEMALE' | 'MALE' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
   interests: string[];
 };
 
