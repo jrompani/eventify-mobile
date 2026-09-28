@@ -17,10 +17,11 @@ import { formatShortDate } from '../utils/format';
 
 type NotificationsScreenProps = {
   session: AuthSession;
+  refreshKey: number;
   onUnreadCountChange: (count: number) => void;
 };
 
-export function NotificationsScreen({ session, onUnreadCountChange }: NotificationsScreenProps) {
+export function NotificationsScreen({ session, refreshKey, onUnreadCountChange }: NotificationsScreenProps) {
   const [notifications, setNotifications] = useState<EventifyNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export function NotificationsScreen({ session, onUnreadCountChange }: Notificati
 
   useEffect(() => {
     void loadNotifications();
-  }, [session]);
+  }, [session, refreshKey]);
 
   useEffect(() => {
     onUnreadCountChange(unreadCount);
@@ -301,6 +302,12 @@ function iconFor(type: NotificationType): keyof typeof Ionicons.glyphMap {
   if (type === 'CHECK_IN_CREATED') {
     return 'scan-outline';
   }
+  if (type === 'ORGANIZER_EVENT_CREATED') {
+    return 'calendar-outline';
+  }
+  if (type === 'REGISTRATION_CREATED') {
+    return 'person-add-outline';
+  }
   return 'hourglass-outline';
 }
 
@@ -313,6 +320,8 @@ function labelFor(type: NotificationType) {
     STAFF_ADDED: 'Staff',
     CHECK_IN_CREATED: 'Check-in',
     WAITLIST_OFFERED: 'Waitlist',
+    ORGANIZER_EVENT_CREATED: 'Organizador',
+    REGISTRATION_CREATED: 'Registro',
   };
   return labels[type];
 }

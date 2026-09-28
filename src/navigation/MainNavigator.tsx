@@ -3,7 +3,7 @@ import * as ExpoLocation from 'expo-location';
 import { StyleSheet, View } from 'react-native';
 
 import { listExperiences } from '../api/experiences';
-import { listMyNotifications } from '../api/notifications';
+import { listMyNotifications, subscribeToNotificationStream } from '../api/notifications';
 import { AppHeader } from '../components/AppHeader';
 import { BottomTabs } from '../components/BottomTabs';
 import { Coordinate, enrichExperiencesWithDistance } from '../location/distance';
@@ -36,6 +36,7 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
   const [loadingExperiences, setLoadingExperiences] = useState(false);
   const [experienceError, setExperienceError] = useState<string | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [notificationRefreshKey, setNotificationRefreshKey] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<Coordinate | null>(null);
   const visibleExperiences = useMemo(
     () => enrichExperiencesWithDistance(experiences, userCoordinate),
@@ -78,6 +79,17 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
     return () => {
       mounted = false;
     };
+  }, [session]);
+
+  useEffect(() => {
+    return subscribeToNotificationStream(session, {
+      onEvent: (event) => {
+        setUnreadNotifications(event.data.unreadCount);
+        if (event.name === 'notification.created') {
+          setNotificationRefreshKey((currentKey) => currentKey + 1);
+        }
+      },
+    });
   }, [session]);
 
   useEffect(() => {
@@ -187,6 +199,7 @@ export function MainNavigator({ session, onLogout, onSessionUpdated }: MainNavig
           onSessionUpdated,
           handleCreatedExperience,
           handleUnreadCountChange,
+          notificationRefreshKey,
           setActiveTab,
           userCoordinate,
           selectedOrganizerExperienceId,
@@ -209,6 +222,7 @@ function renderTab(
   onSessionUpdated: (session: AuthSession) => void,
   onCreatedExperience: (experience: Experience) => void,
   onUnreadCountChange: (count: number) => void,
+  notificationRefreshKey: number,
   onChangeTab: (tab: TabKey) => void,
   userCoordinate: Coordinate | null,
   selectedOrganizerExperienceId: string | null,
@@ -241,7 +255,13 @@ function renderTab(
     case 'wallet':
       return <WalletScreen session={session} experiences={experiences} onOpenExperience={onOpenExperience} />;
     case 'notifications':
-      return <NotificationsScreen session={session} onUnreadCountChange={onUnreadCountChange} />;
+      return (
+        <NotificationsScreen
+          session={session}
+          refreshKey={notificationRefreshKey}
+          onUnreadCountChange={onUnreadCountChange}
+        />
+      );
     case 'social':
       return <SocialScreen session={session} experiences={experiences} />;
     case 'organizer':
